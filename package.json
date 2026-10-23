@@ -1,0 +1,10 @@
+{
+  "name": "calacat-narrator-docs",
+  "private": true,
+  "scripts": {
+    "lint:markdown": "markdownlint-cli2 RULES/About.md"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "^0.24.0"
+  }
+}
