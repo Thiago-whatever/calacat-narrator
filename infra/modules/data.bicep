@@ -51,8 +51,35 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-04-15' = {
   tags: tags
 }
 
+resource cosmosDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2025-04-15' = {
+  parent: cosmosAccount
+  name: 'calacat'
+  properties: {
+    resource: {
+      id: 'calacat'
+    }
+  }
+}
+
+resource matchStateContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-04-15' = {
+  parent: cosmosDatabase
+  name: 'match-state'
+  properties: {
+    resource: {
+      id: 'match-state'
+      partitionKey: {
+        paths: ['/match_id']
+        kind: 'Hash'
+        version: 2
+      }
+    }
+  }
+}
+
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
 output cosmosAccountName string = cosmosAccount.name
 output cosmosAccountId string = cosmosAccount.id
 output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
+output cosmosDatabaseName string = cosmosDatabase.name
+output cosmosContainerName string = matchStateContainer.name

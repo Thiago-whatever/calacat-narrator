@@ -64,3 +64,9 @@ file because `/ingest` accepts event envelopes.
   "evidence_event_ids": ["..."], "tier": 2 }
 ```
 Gate rules live in `signals.yaml` (ADR-013): `min_sample`, `min_clock_s`, `deviation (sigma | percentile)`, `milestones[]`, `window_s + hysteresis`, `cooldown_s`. Critical kinds (goal, red card, penalty) bypass the gate.
+
+The Interpreter consumes Event Hubs in match-keyed partitions and stores one Cosmos DB
+document per match in the `calacat/match-state` container, partitioned by `match_id`.
+Documents include the latest sequence and event ID, clock/period, score, possession,
+and team/player counters for passes, shots, goals, cards, duels, fouls, and other events.
+Repeated or stale sequence numbers are ignored; Cosmos ETags protect concurrent writes.

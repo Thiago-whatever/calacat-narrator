@@ -6,6 +6,8 @@ param containerAppsEnvironmentName string
 param containerAppsIdentityName string
 param storageAccountName string
 param cosmosEndpoint string
+param cosmosDatabaseName string
+param cosmosContainerName string
 param eventHubNamespaceName string
 param eventHubName string
 param serviceBusNamespaceName string
@@ -105,12 +107,28 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           value: cosmosEndpoint
         }
         {
+          name: 'COSMOS_DATABASE'
+          value: cosmosDatabaseName
+        }
+        {
+          name: 'COSMOS_CONTAINER'
+          value: cosmosContainerName
+        }
+        {
           name: 'EVENTHUB_FULLY_QUALIFIED_NAMESPACE'
           value: '${eventHubNamespaceName}.servicebus.windows.net'
         }
         {
           name: 'EVENTHUB_NAME'
           value: eventHubName
+        }
+        {
+          name: 'EVENTHUB_CONNECTION__fullyQualifiedNamespace'
+          value: '${eventHubNamespaceName}.servicebus.windows.net'
+        }
+        {
+          name: 'EVENTHUB_CONNECTION__credential'
+          value: 'managedidentity'
         }
         {
           name: 'SERVICEBUS_FULLY_QUALIFIED_NAMESPACE'

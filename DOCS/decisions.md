@@ -133,3 +133,13 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 **How it could be wrong:** Public endpoints increase network exposure even when data access requires identity-based authorization.
 
 **Revisit when:** Before production use or when a private network boundary is available; add private endpoints and restrict public access then.
+
+## ADR-022 — Match-keyed event ordering and aggregate persistence
+
+**Decision:** Partition Event Hubs by `match_id`; persist one Cosmos DB aggregate document per match, deduplicating by event sequence and using ETags for concurrent updates.
+
+**Why:** The interpreter needs ordered, replay-safe state updates while keeping its query and storage model small for the MVP.
+
+**How it could be wrong:** A partition key concentrates one match's traffic on one partition, and a single document may become a contention point at higher event rates.
+
+**Revisit when:** Per-match throughput or Cosmos conflict rates become material; then partition aggregates by match plus entity or use an append-only event ledger.
