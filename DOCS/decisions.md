@@ -117,3 +117,19 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Why:** It's cheap with Agent Framework, makes debugging possible, and doubles as an explainability demo.
 - **How it could be wrong:** Trace propagation across Service Bus needs manual context passing.
 - **Revisit when:** Propagation takes more than an hour. Then trace per hop and correlate by `signal_id`.
+
+## ADR-020 — East US infrastructure and low-reasoning Foundry calls
+- **Decision:** Deploy MVP Azure resources in East US (`eastus`), reference the existing `calacat-narrator/proj-default` Foundry project, and use low reasoning effort for agent calls.
+- **Why:** The existing Foundry account and project are in East US; keeping dependent resources in that region avoids creating a second AI resource. Low reasoning effort keeps routine narrative calls responsive and cost-conscious.
+- **How it could be wrong:** East US capacity or service availability may change, and low reasoning effort may reduce narrative quality for complex moments.
+- **Revisit when:** Required service capacity is unavailable in East US or evaluation shows that a higher reasoning effort materially improves grounded cards.
+
+## ADR-021 — Public endpoints for the MVP
+
+**Decision:** Keep Azure service endpoints public for the MVP; require TLS and managed-identity/RBAC access, and disable shared-key, local, anonymous, or public-blob access where supported.
+
+**Why:** The public demo needs reachable app and Web PubSub endpoints, while a private network would add infrastructure and deployment dependencies outside this slice.
+
+**How it could be wrong:** Public endpoints increase network exposure even when data access requires identity-based authorization.
+
+**Revisit when:** Before production use or when a private network boundary is available; add private endpoints and restrict public access then.

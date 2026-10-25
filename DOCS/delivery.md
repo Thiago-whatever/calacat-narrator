@@ -20,12 +20,18 @@ Work through **issues → PRs**, not straight to `main`. The history becomes evi
 - **Auth:** OIDC federated credentials, so no Azure secrets are stored in GitHub.
 - Use GitHub Actions rather than Azure Pipelines: the repo is already on GitHub, and GitHub is a hero tech.
 
+## Infrastructure as code (ADR-020)
+- `azure.yaml` selects the Bicep entry point in `infra/main.bicep`; `infra/main.parameters.json` maps the azd environment and location.
+- Provision MVP resources in East US. The template references the existing Foundry account/project in `rg-calacat`; it does not create another Foundry resource.
+- Runtime access uses managed identities and scoped data-plane roles. Local/shared-key authentication is disabled where supported; public endpoints remain enabled for the MVP and `.azure/` environment state is ignored by Git (ADR-021).
+- Register the Event Hub, Service Bus, App, Web, SignalR Service, and Operational Insights providers before provisioning (A1).
+
 ## Hosting (what runs where)
 | Component | Service | Scale |
 |---|---|---|
 | Web UI | Static Web Apps (Free) | — |
 | Simulator, agents, MCP server | Container Apps | scale to zero when idle |
-| Ingest, Interpreter | Functions (Flex Consumption) | event-driven |
+| Ingest, Interpreter | Functions (Linux Consumption, Y1) | event-driven |
 | Stream | Event Hubs Standard, 1 TU | Capture needs Standard |
 | Fan-out | Service Bus Standard | topics need Standard |
 | State | Cosmos DB serverless | pay per request |
