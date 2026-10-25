@@ -46,6 +46,13 @@ Every 1 s, a `positions` message carries `{match_clock_s, players:[{id,x,y,speed
 - An optional **scenario director** schedules story beats (early red card, late comeback).
 - `sim.baseline` runs about 50 matches and writes expected-at-minute distributions per metric, used by the signal gate.
 
+Run the deterministic simulator with `python -m calacat_narrator.simulator
+--seed 7 --speed 10 --output match.jsonl`. The JSON Lines file contains event and
+1 Hz position records, each with a `record_type` discriminator. Repeating a seed
+and duration produces identical output; `--speed` affects only pacing when posting
+event records to an optional `--ingest-url`. Position samples remain in the output
+file because `/ingest` accepts event envelopes.
+
 ## Signals (Interpreter → Service Bus)
 ```json
 { "signal_id": "...", "match_id": "...", "kind": "pass_streak", "match_clock_s": 2210,
