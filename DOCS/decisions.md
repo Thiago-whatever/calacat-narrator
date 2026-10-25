@@ -61,7 +61,7 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 ## ADR-010 — Functions HTTP ingest instead of API Management
 - **Decision:** The simulator POSTs to a Function that validates the schema and forwards to Event Hubs.
 - **Why:** It's a realistic HTTP ingest with validation at the trust boundary, with far less setup than APIM.
-- **How it could be wrong:** No rate limiting or API keys like a production gateway would give.
+- **How it could be wrong:** The public demo endpoint has no rate limiting or API keys. Schema validation and a bounded request size limit malformed input, but production use needs an authenticated, rate-limited gateway.
 - **Revisit when:** For enterprise readiness, put APIM in front (documented, not built).
 
 ## ADR-011 — Fabric deferred

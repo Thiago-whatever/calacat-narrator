@@ -1,4 +1,9 @@
 name: calacat-narrator
+services:
+  api:
+    project: .
+    language: python
+    host: function
 infra:
   provider: bicep
   path: infra
