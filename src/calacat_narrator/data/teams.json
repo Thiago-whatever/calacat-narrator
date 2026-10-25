@@ -1,0 +1,28 @@
+{
+  "teams": [
+    {
+      "id": "t-home",
+      "name": "Northbridge Comets",
+      "short_name": "NBR",
+      "colors": ["#214E8A", "#F4C542"],
+      "squad": [
+        "p-nbr-01", "p-nbr-02", "p-nbr-03", "p-nbr-04", "p-nbr-05",
+        "p-nbr-06", "p-nbr-07", "p-nbr-08", "p-nbr-09", "p-nbr-10", "p-nbr-11"
+      ],
+      "form": ["W", "D", "W", "L", "W"],
+      "table_position": 3
+    },
+    {
+      "id": "t-away",
+      "name": "Southmere Foxes",
+      "short_name": "SMF",
+      "colors": ["#8C352B", "#E8D7B5"],
+      "squad": [
+        "p-smf-01", "p-smf-02", "p-smf-03", "p-smf-04", "p-smf-05",
+        "p-smf-06", "p-smf-07", "p-smf-08", "p-smf-09", "p-smf-10", "p-smf-11"
+      ],
+      "form": ["D", "W", "L", "W", "D"],
+      "table_position": 7
+    }
+  ]
+}

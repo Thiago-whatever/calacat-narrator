@@ -13,6 +13,11 @@
 ```
 `seq` is monotonic per match, and consumers use it for ordering and dedupe.
 
+The Python contract is implemented with Pydantic in `src/calacat_narrator/schemas.py`.
+It validates event-specific payloads, timezone-aware timestamps, pitch bounds, and
+1 Hz position snapshots. `src/calacat_narrator/catalog.py` loads and cross-validates
+the fictional team and player catalog packaged in `src/calacat_narrator/data/`.
+
 ## Event types (MVP)
 | type | payload |
 |---|---|
