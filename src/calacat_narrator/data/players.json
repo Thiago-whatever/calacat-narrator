@@ -1,0 +1,26 @@
+{
+  "players": [
+    {"id":"p-nbr-01","name":"Milo Venn","number":1,"position":"goalkeeper","club_id":"t-home","nationality":"NBR","height_cm":189,"preferred_foot":"right"},
+    {"id":"p-nbr-02","name":"Tarin Holt","number":2,"position":"defender","club_id":"t-home","nationality":"NBR","height_cm":181,"preferred_foot":"right"},
+    {"id":"p-nbr-03","name":"Eren Vale","number":3,"position":"defender","club_id":"t-home","nationality":"NBR","height_cm":184,"preferred_foot":"left"},
+    {"id":"p-nbr-04","name":"Soren Pike","number":4,"position":"defender","club_id":"t-home","nationality":"NBR","height_cm":187,"preferred_foot":"right"},
+    {"id":"p-nbr-05","name":"Ilan Mere","number":5,"position":"defender","club_id":"t-home","nationality":"NBR","height_cm":179,"preferred_foot":"left"},
+    {"id":"p-nbr-06","name":"Davin Ro","number":6,"position":"midfielder","club_id":"t-home","nationality":"NBR","height_cm":176,"preferred_foot":"right"},
+    {"id":"p-nbr-07","name":"Kellan Firth","number":7,"position":"midfielder","club_id":"t-home","nationality":"NBR","height_cm":178,"preferred_foot":"both"},
+    {"id":"p-nbr-08","name":"Oren Tal","number":8,"position":"midfielder","club_id":"t-home","nationality":"NBR","height_cm":182,"preferred_foot":"right"},
+    {"id":"p-nbr-09","name":"Bram Elsen","number":9,"position":"forward","club_id":"t-home","nationality":"NBR","height_cm":186,"preferred_foot":"left"},
+    {"id":"p-nbr-10","name":"Riven Sato","number":10,"position":"forward","club_id":"t-home","nationality":"NBR","height_cm":174,"preferred_foot":"right"},
+    {"id":"p-nbr-11","name":"Toma Vey","number":11,"position":"forward","club_id":"t-home","nationality":"NBR","height_cm":180,"preferred_foot":"left"},
+    {"id":"p-smf-01","name":"Aren Quill","number":1,"position":"goalkeeper","club_id":"t-away","nationality":"SMR","height_cm":191,"preferred_foot":"left"},
+    {"id":"p-smf-02","name":"Nilo Fen","number":2,"position":"defender","club_id":"t-away","nationality":"SMR","height_cm":180,"preferred_foot":"right"},
+    {"id":"p-smf-03","name":"Cato Wren","number":3,"position":"defender","club_id":"t-away","nationality":"SMR","height_cm":185,"preferred_foot":"left"},
+    {"id":"p-smf-04","name":"Joren Lark","number":4,"position":"defender","club_id":"t-away","nationality":"SMR","height_cm":188,"preferred_foot":"right"},
+    {"id":"p-smf-05","name":"Tavi Noll","number":5,"position":"defender","club_id":"t-away","nationality":"SMR","height_cm":177,"preferred_foot":"right"},
+    {"id":"p-smf-06","name":"Elior Moss","number":6,"position":"midfielder","club_id":"t-away","nationality":"SMR","height_cm":175,"preferred_foot":"left"},
+    {"id":"p-smf-07","name":"Bren Arlo","number":7,"position":"midfielder","club_id":"t-away","nationality":"SMR","height_cm":181,"preferred_foot":"right"},
+    {"id":"p-smf-08","name":"Vero Senn","number":8,"position":"midfielder","club_id":"t-away","nationality":"SMR","height_cm":179,"preferred_foot":"both"},
+    {"id":"p-smf-09","name":"Kiro Dane","number":9,"position":"forward","club_id":"t-away","nationality":"SMR","height_cm":183,"preferred_foot":"right"},
+    {"id":"p-smf-10","name":"Luca Renn","number":10,"position":"forward","club_id":"t-away","nationality":"SMR","height_cm":176,"preferred_foot":"left"},
+    {"id":"p-smf-11","name":"Maren Olt","number":11,"position":"forward","club_id":"t-away","nationality":"SMR","height_cm":187,"preferred_foot":"right"}
+  ]
+}

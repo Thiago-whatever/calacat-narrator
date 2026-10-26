@@ -13,6 +13,11 @@
 ```
 `seq` is monotonic per match, and consumers use it for ordering and dedupe.
 
+The Python contract is implemented with Pydantic in `src/calacat_narrator/schemas.py`.
+It validates event-specific payloads, timezone-aware timestamps, pitch bounds, and
+1 Hz position snapshots. `src/calacat_narrator/catalog.py` loads and cross-validates
+the fictional team and player catalog packaged in `src/calacat_narrator/data/`.
+
 ## Event types (MVP)
 | type | payload |
 |---|---|
@@ -40,6 +45,13 @@ Every 1 s, a `positions` message carries `{match_clock_s, players:[{id,x,y,speed
 - A possession state machine over zones: each action is chosen by zone and team style (possession, direct, pressing). Players drift toward formation slots plus ball-side shift, and positions are smoothed.
 - An optional **scenario director** schedules story beats (early red card, late comeback).
 - `sim.baseline` runs about 50 matches and writes expected-at-minute distributions per metric, used by the signal gate.
+
+Run the deterministic simulator with `python -m calacat_narrator.simulator
+--seed 7 --speed 10 --output match.jsonl`. The JSON Lines file contains event and
+1 Hz position records, each with a `record_type` discriminator. Repeating a seed
+and duration produces identical output; `--speed` affects only pacing when posting
+event records to an optional `--ingest-url`. Position samples remain in the output
+file because `/ingest` accepts event envelopes.
 
 ## Signals (Interpreter → Service Bus)
 ```json
