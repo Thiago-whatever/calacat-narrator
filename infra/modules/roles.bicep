@@ -20,7 +20,7 @@ var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 var eventHubsDataSenderRoleId = '2b629674-e913-4c01-ae53-ef4638d8f975'
 var eventHubsDataReceiverRoleId = 'a638d3c7-ab3a-418d-83e6-5f17a39d4fde'
 var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'
-var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9147-0e5a2a2247e0'
+var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
 var webPubSubServiceOwnerRoleId = '12cf5a90-567b-43ae-8102-96cf46c7d9b4'
 var cosmosBuiltInDataContributorRoleId = '00000000-0000-0000-0000-000000000002'
 var workloadSignalSubscriptionNames = union(
@@ -193,7 +193,7 @@ resource functionCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAs
   properties: {
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
     principalId: functionPrincipalId
-    scope: '/dbs/${cosmosDatabaseName}'
+    scope: '${cosmosAccount.id}/dbs/${cosmosDatabaseName}'
   }
 }
 
@@ -203,6 +203,6 @@ resource editorCardsCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRol
   properties: {
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
     principalId: containerAppsIdentityPrincipalId
-    scope: '/dbs/${cosmosDatabaseName}/colls/${cosmosCardsContainerName}'
+    scope: '${cosmosAccount.id}/dbs/${cosmosDatabaseName}/colls/${cosmosCardsContainerName}'
   }
 }
