@@ -1,17 +1,26 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { ControlBar } from './components/ControlBar'
-import { Header, type Prefs } from './components/Header'
-import { InsightFeed, type FeedItem, type MatchChip } from './components/InsightFeed'
-import { EditableCard, StaticCard } from './components/OnScreenCard'
-import { ProgramMonitor } from './components/ProgramMonitor'
-import { useDemoSource, type DemoRun } from './data/useDemoSource'
+import { Button } from '@mui/material'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from 'react'
+import { ControlBar, type BarMode } from './components/control/ControlBar'
+import { DragGhost } from './components/feed/DragGhost'
+import type { FeedItem } from './components/feed/FeedCard'
+import type { MatchChip } from './components/feed/FeedFilters'
+import { InsightFeed } from './components/feed/InsightFeed'
+import { Header } from './components/header/Header'
+import { ConsoleMain, ConsoleRoot, MonitorColumn } from './components/layout/ConsoleLayout'
+import { EditableCard, StaticCard } from './components/monitor/OnScreenCard'
+import { ProgramMonitor } from './components/monitor/ProgramMonitor'
+import { LiveRegion } from './components/ui/primitives'
+import { Toast } from './components/ui/Toast'
 import { MATCH_ID_PATTERN, useLiveSource, type LiveStatus } from './data/live'
+import { useDemoSource, type DemoRun } from './data/useDemoSource'
+import { useFeedDrag, useNow, usePrefs } from './hooks'
 import { minutes, STRINGS, topicLabel } from './i18n'
-import { clamp, COUNTDOWN_MS, initialState, reducer } from './state'
+import { clamp, COUNTDOWN_MS, initialState, reducer, SIZES } from './state'
+import { AppThemeProvider } from './theme/AppThemeProvider'
+import type { ThemePrefs } from './theme/theme'
 import type { CardText, FeedCard, Lang, Source } from './types'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
-const PREFS_KEY = 'calacat.reporter.prefs'
 const TOAST_MS = 4000
 
 /** `?match=m-0007` switches to the live feed when an API base URL was configured at build time. */
@@ -20,75 +29,43 @@ function liveMatchFromUrl(): string | null {
   return API_BASE && match && MATCH_ID_PATTERN.test(match) ? match : null
 }
 
-export default function App() {
-  const liveMatch = liveMatchFromUrl()
-  return liveMatch ? <LiveConsole matchId={liveMatch} /> : <DemoConsole />
-}
-
-function DemoConsole() {
-  const { source, run, toggle } = useDemoSource()
-  return <Console source={source} demo={{ run, toggle }} />
-}
-
-function LiveConsole({ matchId }: { matchId: string }) {
-  const { source, status } = useLiveSource(API_BASE, matchId)
-  return <Console source={source} liveStatus={status} />
-}
-
-interface Stored {
+interface PrefsProps {
   lang: Lang
-  prefs: Prefs
+  setLang: (lang: Lang) => void
+  prefs: ThemePrefs
+  setPrefs: (prefs: ThemePrefs) => void
 }
 
-// Per-viewer conveniences only; storage can be unavailable (private mode), so every access is guarded.
-function loadStored(): Stored {
-  const fallback: Stored = { lang: navigator.language.startsWith('es') ? 'es' : 'en', prefs: { hc: false, lg: false, rm: false } }
-  try {
-    const raw = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null') as Partial<Stored> | null
-    return {
-      lang: raw?.lang === 'es' || raw?.lang === 'en' ? raw.lang : fallback.lang,
-      prefs: { ...fallback.prefs, ...(raw?.prefs ?? {}) },
-    }
-  } catch {
-    return fallback
-  }
+export default function App() {
+  const prefs = usePrefs()
+  const liveMatch = liveMatchFromUrl()
+  return (
+    <AppThemeProvider prefs={prefs.prefs}>
+      {liveMatch ? <LiveConsole matchId={liveMatch} {...prefs} /> : <DemoConsole {...prefs} />}
+    </AppThemeProvider>
+  )
 }
 
-/** Re-renders every `ms` while `active`, for the countdown and the on-air timer. */
-function useNow(ms: number, active: boolean) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!active) return
-    const id = window.setInterval(() => setNow(Date.now()), ms)
-    return () => window.clearInterval(id)
-  }, [ms, active])
-  return now
+function DemoConsole(props: PrefsProps) {
+  const { source, run, toggle } = useDemoSource()
+  return <Console source={source} demo={{ run, toggle }} {...props} />
 }
 
-interface FeedDrag {
-  id: string
-  cx: number
-  cy: number
-  over: boolean
+function LiveConsole({ matchId, ...props }: PrefsProps & { matchId: string }) {
+  const { source, status } = useLiveSource(API_BASE, matchId)
+  return <Console source={source} liveStatus={status} {...props} />
 }
 
-interface ConsoleProps {
+interface ConsoleProps extends PrefsProps {
   source: Source
   demo?: { run: DemoRun; toggle: () => void }
   liveStatus?: LiveStatus
 }
 
-function Console({ source, demo, liveStatus }: ConsoleProps) {
-  const [stored] = useState(loadStored)
-  const [lang, setLang] = useState<Lang>(stored.lang)
-  const [prefs, setPrefs] = useState<Prefs>(stored.prefs)
-  const [a11yOpen, setA11yOpen] = useState(false)
+function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: ConsoleProps) {
   const [s, dispatch] = useReducer(reducer, source.outputs[0].id, initialState)
-  const [fdrag, setFdrag] = useState<FeedDrag | null>(null)
   const [moving, setMoving] = useState({ moving: false, guide: false })
   const stageRef = useRef<HTMLDivElement>(null)
-  const feedPress = useRef<{ id: string; x0: number; y0: number; moved: boolean } | null>(null)
-  const suppressClick = useRef(false)
   const seenCards = useRef<Set<string> | null>(null)
 
   const t = STRINGS[lang]
@@ -98,25 +75,14 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
   const now = useNow(200, !!s.pending || !!air)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ lang, prefs }))
-    } catch {
-      // Storage unavailable: preferences just won't persist.
-    }
     document.documentElement.lang = lang
     document.title = `Calacat Narrator · ${t.sub}`
-  }, [lang, prefs, t.sub])
+  }, [lang, t.sub])
 
   // The countdown commits itself; Go live now commits early (ADR-033).
   useEffect(() => {
     if (s.pending && now >= s.pending.until) dispatch({ type: 'commit', now: Date.now() })
   }, [now, s.pending])
-
-  useEffect(() => {
-    if (!s.toast) return
-    const id = window.setTimeout(() => dispatch({ type: 'dismissToast' }), TOAST_MS)
-    return () => window.clearTimeout(id)
-  }, [s.toast])
 
   // Goals and other critical cards interrupt screen readers; ordinary additions use the feed's polite region.
   useEffect(() => {
@@ -125,8 +91,7 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
     if (!seen) return
     const critical = cards.find((c) => c.critical && !seen.has(c.id))
     if (critical) {
-      const team = teams[critical.team]
-      dispatch({ type: 'announce', message: `${topicLabel(t, critical.topic)}, ${team?.name ?? ''}: ${critical.text[lang].h}` })
+      dispatch({ type: 'announce', message: `${topicLabel(t, critical.topic)}, ${teams[critical.team]?.name ?? ''}: ${critical.text[lang].h}` })
     }
   }, [cards, teams, t, lang])
 
@@ -134,8 +99,7 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
   const textOf = (card: FeedCard): CardText => s.edits[`${card.id}:${lang}`] ?? card.text[lang]
   const teamOf = (card: FeedCard) => teams[card.team]
 
-  const goals = (matchId: string, team: string) =>
-    cards.filter((c) => c.match === matchId && c.team === team && c.topic === 'goal').length
+  const goals = (matchId: string, team: string) => cards.filter((c) => c.match === matchId && c.team === team && c.topic === 'goal').length
   const scoreLine = (matchId: string) => {
     const m = matches[matchId]
     return `${teams[m.home].short} ${goals(matchId, m.home)}–${goals(matchId, m.away)} ${teams[m.away].short}`
@@ -146,10 +110,19 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
     const [kind, id] = s.focus.split(':')
     return kind === 'team' ? c.team === id : c.player?.id === id
   }
-  const inGame = (c: FeedCard) => (s.matchFilter === 'all' || c.match === s.matchFilter) && inFocus(c)
-  const shown = cards.filter(inGame).sort((a, b) => b.salience - a.salience)
+  const shown = cards.filter((c) => (s.matchFilter === 'all' || c.match === s.matchFilter) && inFocus(c)).sort((a, b) => b.salience - a.salience)
   const latest = cards.at(-1)?.id
   const liveOn = (id: string) => outputs.filter((o) => s.onAir[o.id]?.id === id).map((o) => o.name)
+  const matchIds = Object.keys(matches)
+
+  const { drag, handlers: dragHandlers, isClickSuppressed } = useFeedDrag({
+    target: stageRef,
+    canDrag: (id) => !s.pending && air?.id !== id,
+    onDrop: (id, px, py) => {
+      const w = s.geo.width
+      dispatch({ type: 'select', id, place: { x: clamp(px - w / 2, 0, 100 - w), y: clamp(py - 6, 4, 80) }, message: t.placed })
+    },
+  })
 
   const items: FeedItem[] = shown.map((card) => {
     const on = liveOn(card.id)
@@ -157,16 +130,15 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
       card,
       team: teamOf(card),
       text: textOf(card),
-      meta: (card.specialist?.[lang] ?? '') + (s.matchFilter === 'all' && Object.keys(matches).length > 1 ? ` · ${scoreLine(card.match)}` : ''),
+      meta: (card.specialist?.[lang] ?? '') + (s.matchFilter === 'all' && matchIds.length > 1 ? ` · ${scoreLine(card.match)}` : ''),
       isNew: card.id === latest && on.length === 0,
       liveOn: on,
       selected: s.selected === card.id,
       locked: air?.id === card.id,
-      lifted: fdrag?.id === card.id,
+      lifted: drag?.id === card.id,
     }
   })
 
-  const matchIds = Object.keys(matches)
   const chips: MatchChip[] = [
     { id: 'all', label: t.allGames, count: cards.filter(inFocus).length, program: false },
     ...matchIds.map((id) => ({ id, label: scoreLine(id), count: cards.filter((c) => c.match === id && inFocus(c)).length, program: id === output.match })),
@@ -178,7 +150,7 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
   const countdown = s.pending ? clamp(Math.ceil((s.pending.until - now) / 1000), 1, COUNTDOWN_MS / 1000) : 0
   const airSecs = air ? Math.max(0, Math.floor((now - air.since) / 1000)) : 0
 
-  let mode: 'idle' | 'ready' | 'pending' | 'air' = 'idle'
+  let mode: BarMode = 'idle'
   let title = `${t.offAir} · ${output.name}`
   let sub = t.selectHint
   if (s.pending) {
@@ -195,12 +167,11 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
     sub = t.editHint
   }
 
-  const period = { pre: t.preMatch, h1: t.h1, h2: t.h2, ft: t.ft }[source.phase]
   const match = matches[output.match]
+  const sizePreset = !s.geo.height && SIZES.some((z) => z.width === s.geo.width) ? s.geo.width : null
 
-  // ---- Actions
+  // ---- Actions (event handlers only; never called during render)
   const send = () => {
-    // Only called from event handlers, never during render.
     // oxlint-disable-next-line react/purity
     if (selected) dispatch({ type: 'send', text: textOf(selected), now: Date.now(), message: t.sendMsg })
   }
@@ -208,61 +179,18 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
     const target = outputs.find((o) => o.id === (out ?? s.output))
     if (target) dispatch({ type: 'pull', output: target.id, message: `${t.pulled} · ${target.name}` })
   }
-  const pick = (id: string) => {
-    if (!suppressClick.current) dispatch({ type: 'select', id })
-  }
   const toggleRun = () => {
     if (demo?.run === 'finished') dispatch({ type: 'reset', output: s.output })
     demo?.toggle()
   }
-
-  // ---- Drag from the feed: a ghost follows the pointer; releasing over the monitor places the card there.
-  const overStage = (x: number, y: number) => {
-    const r = stageRef.current?.getBoundingClientRect()
-    return !!r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
-  }
-  const feedDrag = {
-    down: (e: PointerEvent<HTMLButtonElement>, id: string) => {
-      if (e.button !== 0 || s.pending || air?.id === id) return
-      feedPress.current = { id, x0: e.clientX, y0: e.clientY, moved: false }
-      e.currentTarget.setPointerCapture(e.pointerId)
-    },
-    move: (e: PointerEvent<HTMLButtonElement>) => {
-      const f = feedPress.current
-      if (!f) return
-      if (!f.moved && Math.hypot(e.clientX - f.x0, e.clientY - f.y0) < 6) return
-      f.moved = true
-      setFdrag({ id: f.id, cx: e.clientX, cy: e.clientY, over: overStage(e.clientX, e.clientY) })
-    },
-    up: (e: PointerEvent<HTMLButtonElement>) => {
-      const f = feedPress.current
-      feedPress.current = null
-      setFdrag(null)
-      if (!f?.moved) return
-      suppressClick.current = true
-      window.setTimeout(() => { suppressClick.current = false }, 0)
-      const r = stageRef.current?.getBoundingClientRect()
-      if (!r || !overStage(e.clientX, e.clientY)) return
-      const px = ((e.clientX - r.left) / r.width) * 100
-      const py = ((e.clientY - r.top) / r.height) * 100
-      const w = s.geo.width
-      dispatch({ type: 'select', id: f.id, place: { x: clamp(px - w / 2, 0, 100 - w), y: clamp(py - 6, 4, 80) }, message: t.placed })
-    },
-    cancel: () => {
-      feedPress.current = null
-      setFdrag(null)
-    },
-  }
-
   const onMoving = useCallback((isMoving: boolean, guide: boolean) => setMoving({ moving: isMoving, guide }), [])
 
   // ---- Keyboard: J/K move through the feed, Enter on the selected card goes live, Esc in the documented order.
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement
-    const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+    const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.getAttribute('role') === 'combobox'
     if (e.key === 'Escape') {
       if (s.pending) dispatch({ type: 'cancel', message: t.cancelMsg })
-      else if (a11yOpen) setA11yOpen(false)
       else if (inField) target.blur()
       else if (air) pull()
       else dispatch({ type: 'clearSelection' })
@@ -275,23 +203,23 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
       const i = ids.indexOf(s.selected ?? '')
       const next = ids[e.key === 'j' ? Math.min(ids.length - 1, i + 1) : Math.max(0, i - 1)]
       if (next !== s.selected) dispatch({ type: 'select', id: next })
-      document.querySelector<HTMLButtonElement>(`[data-card-id="${CSS.escape(next)}"]`)?.focus()
+      document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(next)}"]`)?.focus()
     } else if (e.key === 'Enter' && s.selected && target.dataset.cardId === s.selected) {
       e.preventDefault()
       send()
     }
   }
 
-  const rootCls = ['root', prefs.hc && 'hc', prefs.lg && 'lg', prefs.rm && 'rm', (fdrag || moving.moving) && 'dragging'].filter(Boolean).join(' ')
-  const fdCard = fdrag ? cardById.get(fdrag.id) : undefined
+  const dragCard = drag ? cardById.get(drag.id) : undefined
   const toastOut = s.toast ? outputs.find((o) => o.id === s.toast) : undefined
   const liveText = liveStatus === 'connecting' ? t.feedConnecting : liveStatus === 'error' ? t.feedError : undefined
   const emptyText = cards.length === 0 ? (liveText ?? t.empty) : s.focus ? t.emptyFocus : t.emptyFilter
+  const programLabel = `${t.program} · ${output.name}`
 
   return (
-    <div className={rootCls} lang={lang} onKeyDown={onKey}>
-      <div className="sr" aria-live="assertive">{s.announce}</div>
-      <div className="sr" aria-live="polite">{s.polite}</div>
+    <ConsoleRoot lang={lang} onKeyDown={onKey} dragging={!!drag || moving.moving}>
+      <LiveRegion politeness="assertive">{s.announce}</LiveRegion>
+      <LiveRegion politeness="polite">{s.polite}</LiveRegion>
 
       <Header
         t={t}
@@ -299,42 +227,32 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
         onLang={setLang}
         prefs={prefs}
         onPrefs={setPrefs}
-        a11yOpen={a11yOpen}
-        onA11yOpen={setA11yOpen}
         run={demo && {
           label: demo.run === 'running' ? t.pause : demo.run === 'finished' ? t.restart : demo.run === 'paused' ? t.resume : t.start,
           running: demo.run === 'running',
           onToggle: toggleRun,
         }}
         liveStatus={liveText}
-        outputs={outputs.map((o) => ({
-          id: o.id,
-          name: o.name,
-          score: scoreLine(o.match),
-          live: !!s.onAir[o.id],
-          pressed: o.id === s.output,
-          disabled: !!s.pending && o.id !== s.output,
-        }))}
+        outputs={outputs.map((o) => ({ id: o.id, name: o.name, score: scoreLine(o.match), live: !!s.onAir[o.id], disabled: !!s.pending && o.id !== s.output }))}
+        output={s.output}
         onOutput={(id) => dispatch({ type: 'setOutput', output: id })}
-        period={period}
+        period={{ pre: t.preMatch, h1: t.h1, h2: t.h2, ft: t.ft }[source.phase]}
       />
 
-      <main className="main">
-        <section className="left" aria-label={`${t.program} · ${output.name}`}>
+      <ConsoleMain>
+        <MonitorColumn aria-label={programLabel}>
           <ProgramMonitor
             ref={stageRef}
-            t={t}
-            label={`${t.program} · ${output.name}`}
-            outputName={output.name}
+            label={programLabel}
+            tally={output.name + (air ? ` · ${t.onAir}` : '')}
+            onAir={!!air}
             home={teams[match.home]}
             away={teams[match.away]}
             score={`${goals(match.id, match.home)}–${goals(match.id, match.away)}`}
             minute={minutes(source.clock)}
-            onAir={!!air}
-            showKickoff={source.phase === 'pre'}
-            kickoffHint={demo ? t.preHint : t.liveHint}
+            kickoff={source.phase === 'pre' ? { title: t.kickoff, hint: demo ? t.preHint : t.liveHint } : undefined}
             guide={moving.guide}
-            drop={fdrag && { over: fdrag.over }}
+            drop={drag && { over: drag.over, hint: drag.over ? t.release : t.dragTo }}
           >
             {air && cardById.has(air.id) && (
               <StaticCard card={cardById.get(air.id)!} team={teamOf(cardById.get(air.id)!)} geo={air} text={air} mode="live" badge={t.bLive} t={t} />
@@ -372,8 +290,7 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
             sub={sub}
             mode={mode}
             countdown={countdown}
-            width={s.geo.width}
-            fixedHeight={s.geo.height !== null}
+            sizePreset={sizePreset}
             canEdit={editing}
             canSend={!!selected}
             canPull={!!air}
@@ -384,45 +301,48 @@ function Console({ source, demo, liveStatus }: ConsoleProps) {
             onGoNow={() => dispatch({ type: 'commit', now: Date.now() })}
             onCancel={() => dispatch({ type: 'cancel', message: t.cancelMsg })}
           />
-        </section>
+        </MonitorColumn>
 
         <InsightFeed
           t={t}
           items={items}
           emptyText={emptyText}
-          chips={chips}
-          matchFilter={s.matchFilter}
-          onFilter={(id) => dispatch({ type: 'setFilter', match: id })}
-          focus={s.focus}
-          onFocus={(focus) => dispatch({ type: 'setFocus', focus })}
-          teams={focusTeams}
-          players={source.players}
-          teamById={teams}
-          onPick={pick}
-          drag={feedDrag}
+          filters={{
+            chips,
+            matchFilter: s.matchFilter,
+            onFilter: (id) => dispatch({ type: 'setFilter', match: id }),
+            focus: s.focus,
+            onFocus: (focus) => dispatch({ type: 'setFocus', focus }),
+            teams: focusTeams,
+            players: source.players,
+            teamById: teams,
+          }}
+          onPick={(id) => !isClickSuppressed() && dispatch({ type: 'select', id })}
+          drag={dragHandlers}
         />
-      </main>
+      </ConsoleMain>
 
-      {fdrag && fdCard && (
-        <div className={`ghost${fdrag.over ? ' over' : ''}`} style={{ left: fdrag.cx, top: fdrag.cy }} aria-hidden="true">
-          <span className="gtopic">{teamOf(fdCard).short} · {topicLabel(t, fdCard.topic)} · {minutes(fdCard.clock)}</span>
-          <span className="disp gh">{textOf(fdCard).h}</span>
-          <span className="gs">{fdrag.over ? t.release : t.dragTo}</span>
-        </div>
+      {drag && dragCard && (
+        <DragGhost
+          x={drag.x}
+          y={drag.y}
+          over={drag.over}
+          meta={`${teamOf(dragCard).short} · ${topicLabel(t, dragCard.topic)} · ${minutes(dragCard.clock)}`}
+          headline={textOf(dragCard).h}
+          hint={drag.over ? t.release : t.dragTo}
+        />
       )}
 
-      {toastOut && s.onAir[toastOut.id] && (
-        <div className="toast" role="status">
-          <span className="tick" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-          </span>
-          <div className="toast-text">
-            <div className="toast-title">{t.toastTitle} {toastOut.name}</div>
-            <div className="toast-h">{s.onAir[toastOut.id]?.h}</div>
-          </div>
-          <button type="button" className="btn" onClick={() => pull(toastOut.id)}>{t.pull}</button>
-        </div>
-      )}
-    </div>
+      <Toast
+        open={!!toastOut && !!s.onAir[toastOut.id]}
+        title={toastOut ? `${t.toastTitle} ${toastOut.name}` : ''}
+        detail={toastOut ? s.onAir[toastOut.id]?.h : undefined}
+        duration={TOAST_MS}
+        onClose={() => dispatch({ type: 'dismissToast' })}
+        action={
+          <Button onClick={() => toastOut && pull(toastOut.id)}>{t.pull}</Button>
+        }
+      />
+    </ConsoleRoot>
   )
 }

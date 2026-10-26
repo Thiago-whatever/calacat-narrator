@@ -18,14 +18,23 @@ npm run build    # static site in dist/
   Teams and players come from the backend catalog in `src/calacat_narrator/data/`.
   The Function App must allow the console's origin in CORS.
 
-## Layout
+## Structure
+
+Built on MUI (Material UI) with Emotion. All styling flows from one theme; no stylesheet files.
 
 | Path | What |
 | --- | --- |
+| `src/theme/tokens.ts` | Design tokens: colors (normal + high contrast), fonts, radii, sizes, motion, breakpoints. The only place raw colors live |
+| `src/theme/theme.ts` | `createAppTheme(prefs)`: MUI palette, typography variants (`display`, `label`, `hint`), custom Button/Chip variants and sizes, component overrides |
+| `src/theme/AppThemeProvider.tsx` | Theme, CssBaseline and the global reduce-motion rule |
+| `src/components/ui/` | Reusable kit: `Pill`, `StatusDot`, `KeyHint`, `SalienceMeter`, `EmptyState`, `SelectField`, `SegmentedControl`, `Toast`, icons |
+| `src/components/{header,monitor,control,feed,layout}/` | Console features composed from the kit |
+| `src/hooks.ts` | `usePrefs`, `useNow`, `useFeedDrag` |
 | `src/state.ts` | Console reducer: preview, 5 s go-live countdown, on-air lock, pull (ADR-032/033/034) |
 | `src/data/` | Demo fixtures and simulated clock; live Web PubSub adapter |
-| `src/components/` | Header, program monitor, on-screen card, control bar, insight feed |
 | `src/i18n.ts` | EN/ES UI strings |
-| `src/styles.css` | Design tokens and layout; stacks below 1100px wide or 560px tall |
+
+To restyle, change tokens or theme overrides; components read `theme.custom.*` and never hard-code colors.
+High contrast, larger text and reduce motion rebuild the theme from the same tokens.
 
 Go-live state is local to the browser for now; the overlay delivery contract is C14.
