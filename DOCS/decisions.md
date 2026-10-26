@@ -166,7 +166,7 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 
 ## ADR-025 — Keep agent provenance and message settlement in the application
 
-**Decision:** Run the reusable Agent Framework worker in Container Apps. Consume one configured, filtered Service Bus signal subscription with the workload managed identity; renew each peek lock for up to five minutes; use the Foundry `narrator-chat` deployment at low reasoning effort and structured output for narrative text only. Attach metrics and evidence IDs from the validated signal in application code, publish a deterministic candidate before completing its input, and scale on the subscription with KEDA and managed identity.
+**Decision:** Run the reusable Agent Framework worker in Container Apps. Set `AZURE_CLIENT_ID` to its attached user-assigned identity so the shared `DefaultAzureCredential` selects that identity for Foundry and Service Bus in Azure, while leaving local developer credential fallback intact. Consume one configured, filtered Service Bus signal subscription; renew each peek lock for up to five minutes; use the Foundry `narrator-chat` deployment at low reasoning effort and structured output for narrative text only. Attach metrics and evidence IDs from the validated signal in application code, publish a deterministic candidate before completing its input, and scale on the subscription with KEDA and managed identity.
 
 **Why:** This keeps narrative claims traceable, lets later specialists reuse the runtime, and ensures failed inference or candidate publication leaves the signal retryable without secrets.
 

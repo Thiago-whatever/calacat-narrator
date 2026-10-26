@@ -26,7 +26,7 @@ Work through **issues → PRs**, not straight to `main`. The history becomes evi
 - Cosmos DB includes the serverless `calacat/match-state` database/container used by the interpreter.
 - Runtime access uses managed identities and scoped data-plane roles. Local/shared-key authentication is disabled where supported; public endpoints remain enabled for the MVP and `.azure/` environment state is ignored by Git (ADR-021).
 - The Container Apps user-assigned identity receives Cognitive Services OpenAI User on the existing Foundry account for model calls (ADR-024).
-- `agent-runtime` is a Docker-built Container App worker. It consumes a configured Service Bus signal subscription, publishes candidates, and scales to zero using the same managed identity for Foundry, messaging, and ACR pull (ADR-025). Install the Foundry provider with the project dependencies using `python -m pip install --pre -e .`.
+- `agent-runtime` is a Docker-built Container App worker. It consumes a configured Service Bus signal subscription, publishes candidates, and scales to zero using the same managed identity for Foundry, messaging, and ACR pull (ADR-025). The app sets `AZURE_CLIENT_ID` to that attached identity's client ID so `DefaultAzureCredential` selects it in Azure; local development can leave it unset and use developer credentials. Install the Foundry provider with the project dependencies using `python -m pip install --pre -e .`.
 - Register the Event Hub, Service Bus, App, Web, SignalR Service, and Operational Insights providers before provisioning (A1).
 
 ## Hosting (what runs where)
