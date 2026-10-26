@@ -87,6 +87,10 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = {
           }
           env: [
             {
+              name: 'AZURE_CLIENT_ID'
+              value: containerAppsIdentity.properties.clientId
+            }
+            {
               name: 'FOUNDRY_PROJECT_ENDPOINT'
               value: foundryProjectEndpoint
             }
