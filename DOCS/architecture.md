@@ -9,13 +9,17 @@ flowchart LR
   EH -->|Capture| LAKE[(ADLS Gen2<br/>raw lake)]
   EH --> INT[Interpreter<br/>Function]
   INT --> COS[(Cosmos DB<br/>state · aggregates)]
-  INT -->|signals| SB{{Service Bus topic<br/>filtered subscriptions}}
-  SB --> A1[Goal & Shot]
+  INT -->|signals| SB{{Service Bus signals topic<br/>filtered subscriptions}}
+  SB --> A1[Goal & Shot specialist]
   SB --> A2[Build-up & Passing]
   SB --> A3[Tactical]
   SB --> A4[Player / Milestones]
   A1 & A2 & A3 & A4 -.MCP tools.-> MCP[match-stats<br/>MCP server] -.-> COS
-  A1 & A2 & A3 & A4 -->|candidates| ED[Editor agent]
+  A1 -->|candidates| CT{{Candidates topic}}
+  CT --> ED[Editor subscription]
+  A2[Build-up & Passing] --> CT
+  A3[Tactical] --> CT
+  A4[Player / Milestones] --> CT
   SB -->|DLQ| ED
   ED --> CARDS[(Cosmos cards)]
   CARDS -->|change feed| PUB[Web PubSub]
@@ -48,7 +52,7 @@ flowchart LR
 | Player / Milestones | `speed_threshold`, `distance_threshold`, `record` | Player tagging, records |
 | Editor | all candidates + DLQ | Ranked, deduped, rate-limited cards; HT/FT recap trigger |
 
-**Candidate schema:** `{headline, why_it_matters, metrics{}, evidence_event_ids[], entity_ids[], topic, self_salience, ttl_s, match_clock}`.
+**Candidate schema:** `{candidate_id, signal_id, match_id, headline, why_it_matters, metrics{}, evidence_event_ids[], entity_ids[], topic, self_salience, ttl_s, match_clock_s}`. The generic Container Apps runtime consumes one configured filtered subscription and publishes candidates for the Editor.
 
 ## Failure handling
 - Each signal has a delivery timeout. After max retries it goes to the **DLQ**.

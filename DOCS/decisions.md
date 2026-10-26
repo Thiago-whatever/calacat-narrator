@@ -164,6 +164,16 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 
 **Revisit when:** The Container App identity or Foundry account changes; verify the deployed agent uses this exact identity before rollout.
 
+## ADR-025 — Keep agent provenance and message settlement in the application
+
+**Decision:** Run the reusable Agent Framework worker in Container Apps. Set `AZURE_CLIENT_ID` to its attached user-assigned identity so the shared `DefaultAzureCredential` selects that identity for Foundry and Service Bus in Azure, while leaving local developer credential fallback intact. Consume one configured, filtered Service Bus signal subscription; renew each peek lock for up to five minutes; use the Foundry `narrator-chat` deployment at low reasoning effort and structured output for narrative text only. Attach metrics and evidence IDs from the validated signal in application code, publish a deterministic candidate before completing its input, and scale on the subscription with KEDA and managed identity.
+
+**Why:** This keeps narrative claims traceable, lets later specialists reuse the runtime, and ensures failed inference or candidate publication leaves the signal retryable without secrets.
+
+**How it could be wrong:** The generic prompt may be too broad for specialist-quality analysis, and retries can still duplicate work or output after Service Bus duplicate detection expires.
+
+**Revisit when:** Adding a specialist prompt, changing the Foundry deployment, or moving to transactional outbox semantics.
+
 ## ADR-029 — Possession-scoped pass streaks
 - **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
 - **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.

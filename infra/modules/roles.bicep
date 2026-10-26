@@ -8,6 +8,8 @@ param cosmosDatabaseName string
 param eventHubNamespaceName string
 param serviceBusNamespaceName string
 param serviceBusTopicName string
+param serviceBusCandidateTopicName string
+param serviceBusSignalSubscriptionName string
 param webPubSubName string
 param containerRegistryName string
 
@@ -46,6 +48,16 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2024-01-01' existi
 resource serviceBusTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' existing = {
   parent: serviceBusNamespace
   name: serviceBusTopicName
+}
+
+resource agentSignalSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' existing = {
+  parent: serviceBusTopic
+  name: serviceBusSignalSubscriptionName
+}
+
+resource candidatesTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' existing = {
+  parent: serviceBusNamespace
+  name: serviceBusCandidateTopicName
 }
 
 resource webPubSub 'Microsoft.SignalRService/WebPubSub@2024-03-01' existing = {
@@ -116,12 +128,22 @@ resource functionServiceBusSenderRole 'Microsoft.Authorization/roleAssignments@2
   }
 }
 
-resource functionServiceBusReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(serviceBusTopic.id, functionPrincipalId, serviceBusDataReceiverRoleId)
-  scope: serviceBusTopic
+resource agentSignalReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(agentSignalSubscription.id, containerAppsIdentityPrincipalId, serviceBusDataReceiverRoleId)
+  scope: agentSignalSubscription
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataReceiverRoleId)
-    principalId: functionPrincipalId
+    principalId: containerAppsIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource agentCandidateSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(candidatesTopic.id, containerAppsIdentityPrincipalId, serviceBusDataSenderRoleId)
+  scope: candidatesTopic
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataSenderRoleId)
+    principalId: containerAppsIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
 }

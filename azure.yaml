@@ -4,6 +4,13 @@ services:
     project: .
     language: python
     host: function
+  agent-runtime:
+    project: .
+    language: docker
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
 infra:
   provider: bicep
   path: infra
