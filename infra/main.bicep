@@ -151,7 +151,8 @@ module foundryRole 'modules/foundry-role.bicep' = {
 output functionAppName string = compute.outputs.functionAppName
 output containerAppsEnvironmentId string = compute.outputs.containerAppsEnvironmentId
 output containerAppsIdentityResourceId string = compute.outputs.containerAppsIdentityResourceId
-output containerRegistryLoginServer string = compute.outputs.containerRegistryLoginServer
+// azd reads this exact name to find the registry for remote builds.
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = compute.outputs.containerRegistryLoginServer
 output storageAccountName string = data.outputs.storageAccountName
 output cosmosAccountName string = data.outputs.cosmosAccountName
 output cosmosEndpoint string = data.outputs.cosmosEndpoint
