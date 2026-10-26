@@ -1,5 +1,19 @@
 name: calacat-narrator
 services:
+  agent-runtime-buildup-passing:
+    project: .
+    language: docker
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
+  editor:
+    project: .
+    language: docker
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
   api:
     project: .
     language: python

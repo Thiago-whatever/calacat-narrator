@@ -85,7 +85,7 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
         containers: [
           {
             name: 'agent-runtime'
-            image: '${containerRegistry.properties.loginServer}/agent-runtime:latest'
+            image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
             resources: {
               cpu: json('0.5')
               memory: '1Gi'
@@ -177,7 +177,7 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
       containers: [
         {
           name: 'editor'
-          image: '${containerRegistry.properties.loginServer}/agent-runtime:latest'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           command: [
             'python'
             '-m'
@@ -254,8 +254,8 @@ resource functionPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   location: location
   kind: 'linux'
   sku: {
-    name: 'Y1'
-    tier: 'Dynamic'
+    name: 'FC1'
+    tier: 'FlexConsumption'
   }
   properties: {
     reserved: true
@@ -273,19 +273,28 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   properties: {
     httpsOnly: true
     serverFarmId: functionPlan.id
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: 'https://${storageAccountName}.blob.${environment().suffixes.storage}/app-package'
+          authentication: {
+            type: 'SystemAssignedIdentity'
+          }
+        }
+      }
+      scaleAndConcurrency: {
+        maximumInstanceCount: 40
+        instanceMemoryMB: 2048
+      }
+      runtime: {
+        name: 'python'
+        version: '3.12'
+      }
+    }
     siteConfig: {
-      ftpsState: 'Disabled'
-      linuxFxVersion: 'PYTHON|3.12'
       minTlsVersion: '1.2'
       appSettings: [
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'python'
-        }
         {
           name: 'AzureWebJobsStorage__accountName'
           value: storageAccountName
