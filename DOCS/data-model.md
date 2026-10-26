@@ -15,8 +15,12 @@
 
 The Python contract is implemented with Pydantic in `src/calacat_narrator/schemas.py`.
 It validates event-specific payloads, timezone-aware timestamps, pitch bounds, and
-1 Hz position snapshots. `src/calacat_narrator/catalog.py` loads and cross-validates
-the fictional team and player catalog packaged in `src/calacat_narrator/data/`.
+1 Hz position snapshots. The anonymous `POST /ingest` Function accepts one JSON event
+envelope per request, enforces a 64 KiB request-body limit, and publishes only validated
+events to Event Hubs using the Function App managed identity. Invalid input returns
+`400`, oversized input `413`, unsupported content types `415`, and Event Hubs failures
+`503`. `src/calacat_narrator/catalog.py` loads and cross-validates the fictional team
+and player catalog packaged in `src/calacat_narrator/data/`.
 
 ## Event types (MVP)
 | type | payload |
