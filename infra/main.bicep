@@ -77,15 +77,25 @@ module observability 'modules/observability.bicep' = {
   }
 }
 
+module registry 'modules/registry.bicep' = {
+  name: 'registry-${nameSuffix}'
+  params: {
+    location: location
+    containerRegistryName: 'cr${baseName}'
+    containerAppsIdentityName: 'id-${baseName}'
+    tags: tags
+  }
+}
+
 module compute 'modules/compute.bicep' = {
   name: 'compute-${nameSuffix}'
   params: {
     location: location
     functionAppName: 'fn-${baseName}'
     functionPlanName: 'plan-${baseName}'
-    containerRegistryName: 'cr${baseName}'
+    containerRegistryName: registry.outputs.containerRegistryName
     containerAppsEnvironmentName: 'cae-${baseName}'
-    containerAppsIdentityName: 'id-${baseName}'
+    containerAppsIdentityName: registry.outputs.containerAppsIdentityName
     storageAccountName: data.outputs.storageAccountName
     deploymentStorageContainerUrl: data.outputs.deploymentStorageContainerUrl
     containerImages: containerImages

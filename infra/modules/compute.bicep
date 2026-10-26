@@ -29,37 +29,13 @@ param tags object
 
 // The registry is empty on first provision; later provisions keep what azd deployed.
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
-
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
+// Created with AcrPull in registry.bicep; main.bicep passes its outputs, so compute runs after it.
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: containerRegistryName
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: false
-    anonymousPullEnabled: false
-    publicNetworkAccess: 'Enabled'
-  }
-  tags: tags
 }
 
-resource containerAppsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource containerAppsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: containerAppsIdentityName
-  location: location
-  tags: tags
-}
-
-// Container Apps validate registry access when a revision is created, so AcrPull must exist before them.
-resource containerAppsAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, containerAppsIdentity.id, acrPullRoleId)
-  scope: containerRegistry
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
-    principalId: containerAppsIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01' = {
@@ -78,9 +54,6 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01'
 
 resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
   for subscriptionName in serviceBusSignalSubscriptionNames: {
-    dependsOn: [
-      containerAppsAcrPullRole
-    ]
     name: subscriptionName == 'goal-shot'
       ? 'agent-${containerAppsEnvironmentName}'
       : 'agent-b-${take(containerAppsEnvironmentName, 15)}-${take(uniqueString(subscriptionName, containerAppsEnvironmentName), 6)}'
@@ -177,9 +150,6 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
 ]
 
 resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
-  dependsOn: [
-    containerAppsAcrPullRole
-  ]
   name: 'editor-${take(containerAppsEnvironmentName, 20)}'
   location: location
   identity: {
