@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import List  # noqa: UP035 - see interpret()
 
 import azure.functions as func
 from azure.core.exceptions import AzureError
@@ -72,7 +73,7 @@ def ingest(req: func.HttpRequest) -> func.HttpResponse:
     connection="EVENTHUB_CONNECTION",
     cardinality="many",
 )
-def interpret(events: list[func.EventHubEvent]) -> None:
+def interpret(events: List[func.EventHubEvent]) -> None:  # noqa: UP006 - Functions worker rejects builtin list[...]
     """Update durable match aggregates from an ordered Event Hubs batch."""
     container = get_match_container()
     for received_event in events:
