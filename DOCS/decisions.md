@@ -153,3 +153,13 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 **How it could be wrong:** Service Bus may accept a signal before a later Cosmos conflict or failure; duplicate detection limits but does not eliminate duplicates beyond its configured history window.
 
 **Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.
+
+## ADR-024 — Grant model access to the agent workload identity
+
+**Decision:** Assign Cognitive Services OpenAI User on the existing Foundry account to the user-assigned identity intended for Container Apps, not the ingest/interpreter Function identity.
+
+**Why:** The Container Apps agent runtime calls Foundry; granting only that workload identity follows least privilege and avoids giving model access to unrelated Functions.
+
+**How it could be wrong:** If the agent service uses a different managed identity, the deployment will need to attach and authorize that identity instead.
+
+**Revisit when:** The Container App identity or Foundry account changes; verify the deployed agent uses this exact identity before rollout.
