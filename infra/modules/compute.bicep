@@ -16,6 +16,9 @@ param serviceBusTopicName string
 param serviceBusCandidateTopicName string
 param serviceBusSignalSubscriptionNames array
 param serviceBusEditorSignalSubscriptionNames array
+@description('Deployed images keyed by azd service name; empty until the first azd deploy.')
+param containerImages object
+param deploymentStorageContainerUrl string
 param webPubSubHostName string
 param applicationInsightsConnectionString string
 param foundryAccountResourceId string
@@ -23,6 +26,9 @@ param foundryProjectResourceId string
 param foundryProjectEndpoint string
 param foundryModelDeploymentName string
 param tags object
+
+// The registry is empty on first provision; later provisions keep what azd deployed.
+var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   name: containerRegistryName
@@ -85,7 +91,9 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
         containers: [
           {
             name: 'agent-runtime'
-            image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+            image: empty(containerImages[?'agent-runtime-${subscriptionName}'] ?? '')
+              ? placeholderImage
+              : containerImages['agent-runtime-${subscriptionName}']
             resources: {
               cpu: json('0.5')
               memory: '1Gi'
@@ -148,7 +156,7 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
       }
     }
     tags: union(tags, {
-      'azd-service-name': subscriptionName == 'goal-shot' ? 'agent-runtime' : 'agent-runtime-buildup-passing'
+      'azd-service-name': 'agent-runtime-${subscriptionName}'
     })
   }
 ]
@@ -177,17 +185,20 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
       containers: [
         {
           name: 'editor'
-          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-          command: [
-            'python'
-            '-m'
-            'calacat_narrator.editor_worker'
-          ]
+          image: empty(containerImages.?editor ?? '') ? placeholderImage : containerImages.editor
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
           }
           env: [
+            {
+              name: 'WORKER_MODULE'
+              value: 'calacat_narrator.editor_worker'
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: containerAppsIdentity.properties.clientId
+            }
             {
               name: 'SERVICEBUS_FULLY_QUALIFIED_NAMESPACE'
               value: '${serviceBusNamespaceName}.servicebus.windows.net'
@@ -252,7 +263,7 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
 resource functionPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: functionPlanName
   location: location
-  kind: 'linux'
+  kind: 'functionapp'
   sku: {
     name: 'FC1'
     tier: 'FlexConsumption'
@@ -277,14 +288,15 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       deployment: {
         storage: {
           type: 'blobContainer'
-          value: 'https://${storageAccountName}.blob.${environment().suffixes.storage}/app-package'
+          value: deploymentStorageContainerUrl
           authentication: {
             type: 'SystemAssignedIdentity'
           }
         }
       }
       scaleAndConcurrency: {
-        maximumInstanceCount: 40
+        // ponytail: demo-sized cap on anonymous routes; 2048 MB because agent_framework loads in-process.
+        maximumInstanceCount: 10
         instanceMemoryMB: 2048
       }
       runtime: {
@@ -381,6 +393,23 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   tags: union(tags, {
     'azd-service-name': 'api'
   })
+}
+
+// azd deploys to Flex with Entra, so publishing basic auth is never needed.
+resource scmBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-11-01' = {
+  parent: functionApp
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
+resource ftpBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-11-01' = {
+  parent: functionApp
+  name: 'ftp'
+  properties: {
+    allow: false
+  }
 }
 
 output functionAppName string = functionApp.name

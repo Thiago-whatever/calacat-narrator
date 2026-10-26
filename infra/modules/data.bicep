@@ -119,6 +119,7 @@ resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/con
 }
 
 output storageAccountName string = storageAccount.name
+output deploymentStorageContainerUrl string = '${storageAccount.properties.primaryEndpoints.blob}${deploymentContainer.name}'
 output storageAccountId string = storageAccount.id
 output cosmosAccountName string = cosmosAccount.name
 output cosmosAccountId string = cosmosAccount.id

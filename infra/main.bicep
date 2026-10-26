@@ -20,6 +20,9 @@ param foundryProjectName string = 'proj-default'
 @description('Name of the existing Foundry model deployment used for narrative candidates.')
 param foundryModelDeploymentName string = 'narrator-chat'
 
+@description('Images azd last deployed, keyed by service name (SERVICE_<NAME>_IMAGE_NAME).')
+param containerImages object = {}
+
 var environmentToken = take(replace(toLower(environmentName), '-', ''), 8)
 var nameSuffix = take(uniqueString(subscription().id, resourceGroup().id, environmentName), 8)
 var baseName = 'calacat${environmentToken}${nameSuffix}'
@@ -80,6 +83,8 @@ module compute 'modules/compute.bicep' = {
     containerAppsEnvironmentName: 'cae-${baseName}'
     containerAppsIdentityName: 'id-${baseName}'
     storageAccountName: data.outputs.storageAccountName
+    deploymentStorageContainerUrl: data.outputs.deploymentStorageContainerUrl
+    containerImages: containerImages
     cosmosEndpoint: data.outputs.cosmosEndpoint
     cosmosDatabaseName: data.outputs.cosmosDatabaseName
     cosmosContainerName: data.outputs.cosmosContainerName

@@ -1,0 +1,16 @@
+.azure
+.git*
+.github
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+node_modules
+DOCS
+RULES
+infra
+tests
+Dockerfile
+.dockerignore
+package*.json
+*.md

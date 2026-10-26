@@ -20,7 +20,7 @@ services:
     project: .
     language: python
     host: function
-  agent-runtime:
+  agent-runtime-goal-shot:
     project: .
     language: docker
     host: containerapp

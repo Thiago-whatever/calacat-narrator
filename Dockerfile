@@ -8,8 +8,9 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-RUN python -m pip install --no-cache-dir --pre .
+RUN python -m pip install --no-cache-dir .
 
 USER 10001
 
-CMD ["python", "-m", "calacat_narrator.agent_worker"]
+# Container Apps pick their worker via WORKER_MODULE, so the placeholder image needs no command.
+CMD ["sh", "-c", "exec python -m ${WORKER_MODULE:-calacat_narrator.agent_worker}"]
