@@ -80,19 +80,19 @@ resource editorSubscription 'Microsoft.ServiceBus/namespaces/topics/subscription
 var specialistSubscriptions = [
   {
     name: 'goal-shot'
-    filter: 'kind IN (\'goal\', \'penalty\', \'shot_volume\')'
+    filter: 'sys.Label IN (\'goal\', \'penalty\', \'shot_volume\')'
   }
   {
     name: 'buildup-passing'
-    filter: 'kind IN (\'pass_streak\', \'pass_milestone\', \'progression\')'
+    filter: 'sys.Label IN (\'pass_streak\', \'pass_milestone\', \'progression\')'
   }
   {
     name: 'tactical'
-    filter: 'kind IN (\'pressure_shift\', \'attack_side_shift\', \'rhythm_change\')'
+    filter: 'sys.Label IN (\'pressure_shift\', \'attack_side_shift\', \'rhythm_change\')'
   }
   {
     name: 'player-milestones'
-    filter: 'kind IN (\'speed_threshold\', \'distance_threshold\', \'record\')'
+    filter: 'sys.Label IN (\'speed_threshold\', \'distance_threshold\', \'record\')'
   }
 ]
 
@@ -113,7 +113,7 @@ resource signalSubscriptions 'Microsoft.ServiceBus/namespaces/topics/subscriptio
 resource subscriptionFilters 'Microsoft.ServiceBus/namespaces/topics/subscriptions/rules@2024-01-01' = [
   for (subscription, index) in specialistSubscriptions: {
     parent: signalSubscriptions[index]
-    name: '$Default'
+    name: 'signal-kinds' // Service Bus accepts but never persists a user rule named $Default
     properties: {
       filterType: 'SqlFilter'
       sqlFilter: {
