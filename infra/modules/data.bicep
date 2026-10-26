@@ -92,6 +92,22 @@ resource cardsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
+// Change-feed checkpoints for the card push Function.
+resource leasesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-04-15' = {
+  parent: cosmosDatabase
+  name: 'leases'
+  properties: {
+    resource: {
+      id: 'leases'
+      partitionKey: {
+        paths: ['/id']
+        kind: 'Hash'
+        version: 2
+      }
+    }
+  }
+}
+
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
 output cosmosAccountName string = cosmosAccount.name

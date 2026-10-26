@@ -311,6 +311,18 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           value: cosmosContainerName
         }
         {
+          name: 'COSMOS_CARDS_CONTAINER'
+          value: cosmosCardsContainerName
+        }
+        {
+          name: 'COSMOS_CONNECTION__accountEndpoint'
+          value: cosmosEndpoint
+        }
+        {
+          name: 'COSMOS_CONNECTION__credential'
+          value: 'managedidentity'
+        }
+        {
           name: 'EVENTHUB_FULLY_QUALIFIED_NAMESPACE'
           value: '${eventHubNamespaceName}.servicebus.windows.net'
         }
@@ -337,6 +349,10 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
         {
           name: 'WEBPUBSUB_HOST_NAME'
           value: webPubSubHostName
+        }
+        {
+          name: 'WEBPUBSUB_HUB'
+          value: 'cards'
         }
         {
           name: 'AZURE_AI_ACCOUNT_RESOURCE_ID'

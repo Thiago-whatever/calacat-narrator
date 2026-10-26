@@ -153,3 +153,16 @@ deduplicate deliveries by `card_id`.
   "expires_at": "2026-10-23T18:33:00Z"
 }
 ```
+
+## Browser delivery
+
+The `push_cards` Function reads the `cards` container's change feed with its managed
+identity and checkpoints in the `calacat/leases` container. It validates each document
+against the `Card` contract, drops expired cards, and sends each card's JSON to the
+`match-{match_id}` group of the `cards` Web PubSub hub. Failed batches are retried with
+exponential backoff, so a browser can receive a card more than once and must
+deduplicate by `card_id`.
+
+Browsers call `GET /negotiate?match_id=m-0007` and connect to the returned WebSocket
+`url`. The URL is valid for 60 minutes, joins only that match's group, and grants no
+send or join roles. Invalid match IDs return `400`; Web PubSub failures return `503`.
