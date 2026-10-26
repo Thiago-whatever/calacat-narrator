@@ -15,16 +15,26 @@ from calacat_narrator.interpreter import MatchState, update_match_state
 from calacat_narrator.schemas import MatchEvent
 from calacat_narrator.servicebus import publish_signals
 from calacat_narrator.signals import evaluate_signals, load_signal_rules
+from calacat_narrator.webpubsub import (
+    client_access_url,
+    live_cards,
+    match_group,
+    publish_cards,
+    validate_match_id,
+)
 
 logger = logging.getLogger(__name__)
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 
-def _json_response(body: dict[str, object], status_code: int) -> func.HttpResponse:
+def _json_response(
+    body: dict[str, object], status_code: int, headers: dict[str, str] | None = None
+) -> func.HttpResponse:
     return func.HttpResponse(
         json.dumps(body),
         status_code=status_code,
         mimetype="application/json",
+        headers=headers,
     )
 
 
@@ -86,3 +96,41 @@ def interpret(events: list[func.EventHubEvent]) -> None:
             raise
         if not applied:
             logger.info("Skipping duplicate or stale event %s", event.event_id)
+
+
+@app.route(route="negotiate", methods=["GET"])
+def negotiate(req: func.HttpRequest) -> func.HttpResponse:
+    """Return a short-lived, receive-only Web PubSub URL for one match's card group."""
+    try:
+        match_id = validate_match_id(req.params.get("match_id", ""))
+    except ValidationError:
+        return _json_response({"error": "invalid_match_id"}, 400)
+    try:
+        url = client_access_url(match_id)
+    except (AzureError, RuntimeError):
+        logger.exception("Failed to issue Web PubSub client token for %s", match_id)
+        return _json_response({"error": "web_pubsub_unavailable"}, 503)
+    return _json_response(
+        {"url": url, "group": match_group(match_id)},
+        200,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.retry(
+    strategy="exponential_backoff",
+    max_retry_count="5",
+    minimum_interval="00:00:02",
+    maximum_interval="00:00:30",
+)
+@app.cosmos_db_trigger(
+    arg_name="documents",
+    connection="COSMOS_CONNECTION",
+    database_name="%COSMOS_DATABASE%",
+    container_name="%COSMOS_CARDS_CONTAINER%",
+    lease_container_name="leases",
+    create_lease_container_if_not_exists=False,
+)
+def push_cards(documents: func.DocumentList) -> None:
+    """Fan newly persisted, unexpired cards out to their match's Web PubSub group."""
+    publish_cards(live_cards(documents))
