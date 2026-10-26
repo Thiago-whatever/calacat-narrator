@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import azure.functions as func
 import pytest
 from azure.core.exceptions import ServiceRequestError
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
 
 import function_app
 from calacat_narrator import webpubsub
@@ -122,3 +123,61 @@ def test_negotiate_returns_503_when_web_pubsub_fails(monkeypatch) -> None:
     response = function_app.negotiate(negotiate_request("m-0007"))
 
     assert response.status_code == 503
+
+
+class FakeContainer:
+    def __init__(self, documents: list[dict[str, object]], state: dict[str, object] | None) -> None:
+        self.documents = documents
+        self.state = state
+        self.partition_keys: list[str] = []
+
+    def query_items(self, *, query: str, parameters: list[dict[str, str]], partition_key: str):
+        self.partition_keys.append(partition_key)
+        return [d for d in self.documents if d["match_id"] == partition_key]
+
+    def read_item(self, *, item: str, partition_key: str) -> dict[str, object]:
+        if self.state is None:
+            raise CosmosResourceNotFoundError(message="missing")
+        return self.state
+
+
+def cards_request(match_id: str) -> func.HttpRequest:
+    return func.HttpRequest(method="GET", url="/api/cards", body=b"", params={"match_id": match_id})
+
+
+def test_cards_returns_live_cards_and_authoritative_score(monkeypatch) -> None:
+    live = card("candidate-live", created_at=datetime.now(UTC))
+    expired = card("candidate-old")
+    cards_container = FakeContainer([cosmos_document(live), cosmos_document(expired)], None)
+    match_container = FakeContainer([], {"score": {"t-home": 2}, "match_clock_s": 4020})
+    monkeypatch.setattr(function_app, "get_cards_container", lambda: cards_container)
+    monkeypatch.setattr(function_app, "get_match_container", lambda: match_container)
+
+    response = function_app.cards(cards_request("m-0007"))
+
+    body = json.loads(response.get_body())
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert [c["card_id"] for c in body["cards"]] == [live.card_id]
+    assert body["score"] == {"t-home": 2}
+    assert body["match_clock_s"] == 4020
+    assert cards_container.partition_keys == ["m-0007"]
+
+
+def test_cards_before_kickoff_has_empty_score(monkeypatch) -> None:
+    monkeypatch.setattr(function_app, "get_cards_container", lambda: FakeContainer([], None))
+    monkeypatch.setattr(function_app, "get_match_container", lambda: FakeContainer([], None))
+
+    body = json.loads(function_app.cards(cards_request("m-0007")).get_body())
+
+    assert body == {"cards": [], "score": {}, "match_clock_s": 0}
+
+
+def test_cards_rejects_invalid_match_id_and_reports_cosmos_failure(monkeypatch) -> None:
+    assert function_app.cards(cards_request("M-0007")).status_code == 400
+
+    def fail() -> None:
+        raise RuntimeError("COSMOS_ENDPOINT setting is required")
+
+    monkeypatch.setattr(function_app, "get_cards_container", fail)
+    assert function_app.cards(cards_request("m-0007")).status_code == 503

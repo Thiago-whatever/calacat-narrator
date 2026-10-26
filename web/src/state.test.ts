@@ -1,20 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { parseLiveCard, toFeedCard } from './data/live'
+import { mergeCards, parseLiveCard, toFeedCard } from './data/live'
 import { COUNTDOWN_MS, initialState, reducer, type Action, type ConsoleState } from './state'
+import type { FeedCard } from './types'
 
 const text = { h: 'Headline', b: 'Body' }
+const feedCard = (id: string, expiresAt?: number): FeedCard => ({
+  id, match: 'm1', team: 'rio', clock: 60, topic: 'goal', critical: true, salience: 1, text: { en: text, es: text }, expiresAt,
+})
+const card = feedCard('c1')
 const run = (actions: Action[], start: ConsoleState = initialState('o1')) => actions.reduce(reducer, start)
-const onAir = (s: ConsoleState) => run([{ type: 'select', id: 'c1' }, { type: 'send', text, now: 0, message: '' }, { type: 'commit', now: 1 }], s)
+const onAir = (s: ConsoleState) => run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, now: 0, message: '' }, { type: 'commit', now: 1 }], s)
 
 describe('console reducer', () => {
   it('sends a card through a cancellable countdown, then locks it on air', () => {
-    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', text, now: 100, message: 'going' }])
+    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, now: 100, message: 'going' }])
     expect(pending.pending).toMatchObject({ id: 'c1', output: 'o1', until: 100 + COUNTDOWN_MS })
 
     expect(reducer(pending, { type: 'cancel', message: 'cancelled' }).pending).toBeNull()
 
     const live = reducer(pending, { type: 'commit', now: 200 })
-    expect(live.onAir.o1).toMatchObject({ id: 'c1', since: 200, h: 'Headline' })
+    // The on-air card keeps its own snapshot, so it still renders if the feed drops the card.
+    expect(live.onAir.o1).toMatchObject({ id: 'c1', card, since: 200, h: 'Headline' })
     expect(live.selected).toBeNull()
     expect(live.toast).toBe('o1')
     // A live card can't be selected for editing; only pulled.
@@ -22,9 +28,16 @@ describe('console reducer', () => {
   })
 
   it('blocks output switching and selection during a countdown', () => {
-    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', text, now: 0, message: '' }])
+    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, now: 0, message: '' }])
     expect(reducer(pending, { type: 'setOutput', output: 'o2' }).output).toBe('o1')
     expect(reducer(pending, { type: 'select', id: 'c2' }).selected).toBe('c1')
+  })
+
+  it('refuses to send an expired card', () => {
+    const selected = run([{ type: 'select', id: 'old' }])
+    const stale = feedCard('old', 1000)
+    expect(reducer(selected, { type: 'send', card: stale, text, now: 1000, message: '' })).toBe(selected)
+    expect(reducer(selected, { type: 'send', card: stale, text, now: 999, message: '' }).pending?.id).toBe('old')
   })
 
   it('pulls only the targeted output', () => {
@@ -51,6 +64,14 @@ describe('live cards', () => {
     const card = toFeedCard(parseLiveCard(valid)!, 't-home')
     expect(card).toMatchObject({ id: 'card-1', team: 't-home', critical: true, clock: 4020 })
     expect(card.player?.id).toBe('p-nbr-09')
+  })
+
+  it('merges unseen cards and prunes expired ones', () => {
+    const live = feedCard('live', 2000)
+    const prev = [live, feedCard('old', 1000), feedCard('demo')]
+    expect(mergeCards(prev, [live], 500)).toBe(prev)
+    expect(mergeCards(prev, [], 1000).map((c) => c.id)).toEqual(['live', 'demo'])
+    expect(mergeCards(prev, [feedCard('new', 3000), feedCard('new', 3000)], 500).map((c) => c.id)).toEqual(['live', 'old', 'demo', 'new'])
   })
 
   it('rejects malformed payloads', () => {

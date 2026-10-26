@@ -9,7 +9,13 @@ from azure.core.exceptions import AzureError
 from azure.cosmos.exceptions import CosmosHttpResponseError
 from pydantic import ValidationError
 
-from calacat_narrator.cosmos import get_match_container
+from calacat_narrator.cosmos import (
+    get_cards_container,
+    get_match_container,
+    live_cards,
+    query_match_cards,
+    read_match_state,
+)
 from calacat_narrator.eventhub import publish_event
 from calacat_narrator.ingest import MAX_INGEST_BODY_BYTES, parse_event
 from calacat_narrator.interpreter import MatchState, update_match_state
@@ -115,3 +121,26 @@ def negotiate(req: func.HttpRequest) -> func.HttpResponse:
         headers={"Cache-Control": "no-store"},
     )
 
+
+@app.route(route="cards", methods=["GET"])
+def cards(req: func.HttpRequest) -> func.HttpResponse:
+    """Catch-up for a (re)connecting console: unexpired cards plus the interpreter's score."""
+    try:
+        match_id = validate_match_id(req.params.get("match_id", ""))
+    except ValidationError:
+        return _json_response({"error": "invalid_match_id"}, 400)
+    try:
+        documents = query_match_cards(get_cards_container(), match_id)
+        state = read_match_state(get_match_container(), match_id) or {}
+    except (AzureError, RuntimeError):
+        logger.exception("Failed to load catch-up for %s", match_id)
+        return _json_response({"error": "cosmos_unavailable"}, 503)
+    return _json_response(
+        {
+            "cards": [card.model_dump(mode="json") for card in live_cards(documents)],
+            "score": state.get("score", {}),
+            "match_clock_s": state.get("match_clock_s", 0),
+        },
+        200,
+        headers={"Cache-Control": "no-store"},
+    )

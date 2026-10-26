@@ -1,4 +1,4 @@
-import type { CardText } from './types'
+import type { CardText, FeedCard } from './types'
 
 export const COUNTDOWN_MS = 5000
 export const SIZES = [
@@ -15,13 +15,16 @@ export interface Geo {
   height: number | null
 }
 
+// Both carry a snapshot of the card, so what's on air still renders after the feed drops it.
 export interface AirCard extends Geo, CardText {
   id: string
+  card: FeedCard
   since: number
 }
 
 export interface Pending extends Geo, CardText {
   id: string
+  card: FeedCard
   output: string
   until: number
 }
@@ -49,7 +52,7 @@ export type Action =
   | { type: 'setGeo'; geo: Partial<Geo> }
   | { type: 'setSize'; width: number }
   | { type: 'edit'; key: string; text: CardText }
-  | { type: 'send'; text: CardText; now: number; message: string }
+  | { type: 'send'; card: FeedCard; text: CardText; now: number; message: string }
   | { type: 'cancel'; message: string }
   | { type: 'commit'; now: number }
   | { type: 'pull'; output?: string; message: string }
@@ -104,10 +107,12 @@ export function reducer(s: ConsoleState, a: Action): ConsoleState {
     case 'edit':
       return { ...s, edits: { ...s.edits, [a.key]: a.text } }
     case 'send':
-      if (!s.selected || s.pending) return s
+      if (!s.selected || s.pending || a.card.id !== s.selected) return s
+      // An expired insight may no longer be true, so it can't go to air.
+      if (a.card.expiresAt !== undefined && a.card.expiresAt <= a.now) return s
       return {
         ...s,
-        pending: { ...s.geo, ...a.text, id: s.selected, output: s.output, until: a.now + COUNTDOWN_MS },
+        pending: { ...s.geo, ...a.text, id: s.selected, card: a.card, output: s.output, until: a.now + COUNTDOWN_MS },
         polite: a.message,
         toast: null,
       }

@@ -13,10 +13,18 @@ npm run build    # static site in dist/
 ## Modes
 
 - **Demo** (default): the fictional fixtures from the design prototype, driven by **Start match**.
-- **Live**: build with `VITE_API_BASE_URL` set to the Function App origin (see `.env.example`) and open `/?match=m-0007`.
-  The console calls `GET /negotiate`, connects to the receive-only Web PubSub URL, and deduplicates cards by `card_id`.
+- **Live**: build with `VITE_API_BASE_URL=/api` (see `.env.example`) and open `/?match=m-0007`.
+  The console calls `GET /api/negotiate`, connects to the receive-only Web PubSub URL, then loads `GET /api/cards`
+  (unexpired cards plus the interpreter's score) on every connect and every 30 s. Cards are deduplicated by `card_id`,
+  and expired ones leave the feed and can't be sent to air.
   Teams and players come from the backend catalog in `src/calacat_narrator/data/`.
-  The Function App must allow the console's origin in CORS.
+
+## Hosting
+
+Static Web Apps with the Function App as a linked backend (ADR-036), so `/api/*` is same-origin.
+`public/staticwebapp.config.json` restricts the whole console (and `/api/*` through it) to the `reporter` role,
+redirects anonymous users to sign in, and sets a CSP that allows only `'self'` and `wss://*.webpubsub.azure.com`.
+Fonts are bundled from `@fontsource`, so the page makes no third-party requests.
 
 ## Structure
 

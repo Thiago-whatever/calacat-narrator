@@ -47,6 +47,8 @@ export interface FeedCard {
   salience: number
   specialist?: Record<Lang, string>
   text: Record<Lang, CardText>
+  /** Epoch ms after which the insight is stale and must not go to air. Demo cards never expire. */
+  expiresAt?: number
 }
 
 export type Phase = 'pre' | 'h1' | 'h2' | 'ft'
@@ -58,6 +60,8 @@ export interface Source {
   matches: Record<string, Match>
   outputs: Output[]
   cards: FeedCard[]
+  /** Authoritative goals per team id from the interpreter; demo mode counts goal cards instead. */
+  score?: Record<string, number>
   clock: number
   phase: Phase
 }

@@ -99,7 +99,8 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: C
   const textOf = (card: FeedCard): CardText => s.edits[`${card.id}:${lang}`] ?? card.text[lang]
   const teamOf = (card: FeedCard) => teams[card.team]
 
-  const goals = (matchId: string, team: string) => cards.filter((c) => c.match === matchId && c.team === team && c.topic === 'goal').length
+  const goals = (matchId: string, team: string) =>
+    source.score ? (source.score[team] ?? 0) : cards.filter((c) => c.match === matchId && c.team === team && c.topic === 'goal').length
   const scoreLine = (matchId: string) => {
     const m = matches[matchId]
     return `${teams[m.home].short} ${goals(matchId, m.home)}–${goals(matchId, m.away)} ${teams[m.away].short}`
@@ -173,7 +174,7 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: C
   // ---- Actions (event handlers only; never called during render)
   const send = () => {
     // oxlint-disable-next-line react/purity
-    if (selected) dispatch({ type: 'send', text: textOf(selected), now: Date.now(), message: t.sendMsg })
+    if (selected) dispatch({ type: 'send', card: selected, text: textOf(selected), now: Date.now(), message: t.sendMsg })
   }
   const pull = (out?: string) => {
     const target = outputs.find((o) => o.id === (out ?? s.output))
@@ -254,13 +255,11 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: C
             guide={moving.guide}
             drop={drag && { over: drag.over, hint: drag.over ? t.release : t.dragTo }}
           >
-            {air && cardById.has(air.id) && (
-              <StaticCard card={cardById.get(air.id)!} team={teamOf(cardById.get(air.id)!)} geo={air} text={air} mode="live" badge={t.bLive} t={t} />
-            )}
-            {s.pending && cardById.has(s.pending.id) && (
+            {air && <StaticCard card={air.card} team={teamOf(air.card)} geo={air} text={air} mode="live" badge={t.bLive} t={t} />}
+            {s.pending && (
               <StaticCard
-                card={cardById.get(s.pending.id)!}
-                team={teamOf(cardById.get(s.pending.id)!)}
+                card={s.pending.card}
+                team={teamOf(s.pending.card)}
                 geo={s.pending}
                 text={s.pending}
                 mode="pend"

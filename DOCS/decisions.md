@@ -245,3 +245,9 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Why:** One color cue per card reads cleanly and avoids clashes with the brand and live colors, while grey vs red makes the on-air state obvious at a glance. Badges keep state readable without color.
 - **How it could be wrong:** Similar team palettes (two blues) lose their distinction in a small silhouette.
 - **Revisit when:** Real fixtures include clashing kits; then add a second kit color or pattern.
+
+## ADR-036 — Reporter console on Static Web Apps with a linked backend and the `reporter` role
+- **Decision:** Host `web/` on Azure Static Web Apps with the Function App as a linked backend, so the console calls `/api/*` on its own origin (`host.json` `routePrefix` is `api`). `staticwebapp.config.json` restricts every route to a `reporter` role (built-in auth, invitations), redirects `401` to sign-in, and sets a CSP of `'self'` plus `wss://*.webpubsub.azure.com` with `frame-ancestors 'none'`. Fonts are bundled, so nothing loads from a third party. When C14 broadcasts go-live, its endpoint checks the `reporter` role in `x-ms-client-principal` itself, not just the SWA route; the public overlay (C14) gets its own anonymous route.
+- **Why:** Same-origin removes CORS and per-environment API URLs. The console is an operator surface: once go-live reaches the overlay, anyone with the URL could otherwise put text on air. A strict CSP limits what injected content could reach, and self-hosted fonts keep working on locked-down broadcast networks.
+- **How it could be wrong:** Linked backends need the Standard SKU, and judges need an invitation to the role. Emotion's inline styles force `style-src 'unsafe-inline'`.
+- **Revisit when:** Inviting reviewers becomes friction (add a read-only demo route), or Emotion gets a CSP nonce.
