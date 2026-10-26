@@ -85,7 +85,12 @@ The Interpreter consumes Event Hubs in match-keyed partitions and stores one Cos
 document per match in the `calacat/match-state` container, partitioned by `match_id`.
 Documents include the latest sequence and event ID, clock/period, score, possession,
 and team/player counters for passes, shots, goals, cards, duels, fouls, and other events.
-Repeated or stale sequence numbers are ignored; Cosmos ETags protect concurrent writes.
+Pass streaks are scoped to an uninterrupted possession. The current streak and its
+`current_pass_streak_event_ids` contain only completed passes in that possession;
+possession changes, failed passes, lost duels, fouls, shots, and changes of control
+indicated by set-piece or goalkeeper-action events clear the affected streaks. Cards
+alone do not imply a possession change. Repeated or stale sequence numbers are ignored;
+Cosmos ETags protect concurrent writes.
 
 ## Agent candidates and cards
 

@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import pytest
 
@@ -185,3 +186,96 @@ def test_worker_settings_read_all_required_environment_variables() -> None:
 
     assert settings.foundry_model == "narrator-chat"
     assert settings.signals_subscription == "goal-shot"
+
+
+@pytest.mark.parametrize(
+    "client_id",
+    ["container-apps-identity-client-id", None],
+    ids=["container-apps", "local-development"],
+)
+def test_worker_uses_default_credential_for_foundry_and_service_bus(
+    monkeypatch: pytest.MonkeyPatch,
+    client_id: str | None,
+) -> None:
+    if client_id is None:
+        monkeypatch.delenv("AZURE_CLIENT_ID", raising=False)
+    else:
+        monkeypatch.setenv("AZURE_CLIENT_ID", client_id)
+    credential_client_ids: list[str | None] = []
+    foundry_credentials: list[object] = []
+    service_bus_credentials: list[object] = []
+
+    class FakeCredential:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+            return None
+
+    def fake_default_azure_credential(*args, **kwargs):
+        assert args == ()
+        assert kwargs == {}
+        credential_client_ids.append(os.environ.get("AZURE_CLIENT_ID"))
+        return FakeCredential()
+
+    class FakeFoundryChatClient:
+        def __init__(self, **kwargs) -> None:
+            foundry_credentials.append(kwargs["credential"])
+
+    class FakeAgent:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+            return None
+
+    class FakeResource:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+            return None
+
+    class FakeServiceBusClient:
+        def __init__(self, *, fully_qualified_namespace: str, credential) -> None:
+            service_bus_credentials.append(credential)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+            return None
+
+        def get_subscription_receiver(self, **kwargs):
+            return FakeResource()
+
+        def get_topic_sender(self, **kwargs):
+            return FakeResource()
+
+    async def fake_consume_signals(receiver, sender, generator) -> None:
+        pass
+
+    monkeypatch.setattr(agent_worker, "DefaultAzureCredential", fake_default_azure_credential)
+    monkeypatch.setattr(agent_worker, "FoundryChatClient", FakeFoundryChatClient)
+    monkeypatch.setattr(agent_worker, "Agent", FakeAgent)
+    monkeypatch.setattr(agent_worker, "ServiceBusClient", FakeServiceBusClient)
+    monkeypatch.setattr(agent_worker, "FoundryCandidateGenerator", lambda *args: object())
+    monkeypatch.setattr(agent_worker, "consume_signals", fake_consume_signals)
+
+    settings = WorkerSettings(
+        foundry_project_endpoint="https://example.services.ai.azure.com/api/projects/demo",
+        foundry_model="narrator-chat",
+        servicebus_namespace="example.servicebus.windows.net",
+        signals_topic="signals",
+        signals_subscription="goal-shot",
+        candidates_topic="candidates",
+        agent_name="goal-shot",
+    )
+    asyncio.run(agent_worker.run_worker(settings))
+
+    assert credential_client_ids == [client_id]
+    assert len(foundry_credentials) == 1
+    assert foundry_credentials[0] is service_bus_credentials[0]
