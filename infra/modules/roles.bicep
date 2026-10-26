@@ -9,7 +9,7 @@ param eventHubNamespaceName string
 param serviceBusNamespaceName string
 param serviceBusTopicName string
 param serviceBusCandidateTopicName string
-param serviceBusSignalSubscriptionName string
+param serviceBusSignalSubscriptionNames array
 param webPubSubName string
 param containerRegistryName string
 
@@ -50,10 +50,12 @@ resource serviceBusTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' exi
   name: serviceBusTopicName
 }
 
-resource agentSignalSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' existing = {
-  parent: serviceBusTopic
-  name: serviceBusSignalSubscriptionName
-}
+resource agentSignalSubscriptions 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' existing = [
+  for subscriptionName in serviceBusSignalSubscriptionNames: {
+    parent: serviceBusTopic
+    name: subscriptionName
+  }
+]
 
 resource candidatesTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' existing = {
   parent: serviceBusNamespace
@@ -128,15 +130,17 @@ resource functionServiceBusSenderRole 'Microsoft.Authorization/roleAssignments@2
   }
 }
 
-resource agentSignalReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(agentSignalSubscription.id, containerAppsIdentityPrincipalId, serviceBusDataReceiverRoleId)
-  scope: agentSignalSubscription
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataReceiverRoleId)
-    principalId: containerAppsIdentityPrincipalId
-    principalType: 'ServicePrincipal'
+resource agentSignalReceiverRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for index in range(0, length(serviceBusSignalSubscriptionNames)): {
+    name: guid(agentSignalSubscriptions[index].id, containerAppsIdentityPrincipalId, serviceBusDataReceiverRoleId)
+    scope: agentSignalSubscriptions[index]
+    properties: {
+      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataReceiverRoleId)
+      principalId: containerAppsIdentityPrincipalId
+      principalType: 'ServicePrincipal'
+    }
   }
-}
+]
 
 resource agentCandidateSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(candidatesTopic.id, containerAppsIdentityPrincipalId, serviceBusDataSenderRoleId)

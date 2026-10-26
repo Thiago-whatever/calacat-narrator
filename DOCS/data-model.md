@@ -74,8 +74,12 @@ topic with deterministic message IDs and evidence event IDs.
 Goal and penalty signals also carry a bounded, typed `event_context` copied from the
 single evidence event: shot outcome, xG, speed, body part, period, or penalty intent.
 The Goal & Shot specialist can use these values for its narrative; the application
-adds verified `xg` and `shot_speed_kmh` to candidate metrics for goal evidence. Other
-signals omit `event_context`, and signal/candidate evidence IDs remain application-owned.
+adds verified `xg` and `shot_speed_kmh` to candidate metrics for goal evidence.
+Passing signals may carry the triggering pass's outcome, difficulty, and whether its
+reception was inside the opponent's shape. The Build-up & Passing specialist can use
+those details only for that evidenced pass; the application adds `pass_difficulty` and
+`reception_inside_opponent_shape` (0 or 1) to candidate metrics. Event context IDs must
+be included in signal evidence, and signal/candidate evidence IDs remain application-owned.
 
 The Interpreter consumes Event Hubs in match-keyed partitions and stores one Cosmos DB
 document per match in the `calacat/match-state` container, partitioned by `match_id`.

@@ -179,3 +179,9 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Why:** Aggregate goal counts alone cannot support chance-quality or shot-speed narration; keeping event context tied to an evidence ID allows those claims without giving the model authority over metrics or provenance.
 - **How it could be wrong:** Copying context into signals duplicates a small amount of event data, and shot-volume signals still summarize counts rather than every underlying shot.
 - **Revisit when:** The specialist receives match-stat MCP tools or a new signal contract provides richer evidence.
+
+## ADR-027 — Ground Build-up & Passing narratives in pass evidence
+- **Decision:** Passing signals carry typed context from their triggering pass, and the Build-up & Passing specialist receives role-specific instructions. Application code attaches pass difficulty and the inside-opponent-shape flag to candidate metrics; separate filtered Container Apps workers consume the goal-shot and build-up-passing subscriptions.
+- **Why:** A pass streak alone cannot support claims about difficulty or where a reception occurred. Linking these bounded details to an evidence event keeps the narrative specific to what the signal proves and preserves the existing Goal & Shot worker.
+- **How it could be wrong:** The triggering pass's context does not describe every pass in the streak, so this specialist cannot make aggregate claims about the sequence.
+- **Revisit when:** The interpreter computes deterministic sequence-level pass metrics or the specialist receives validated match-stat tools.
