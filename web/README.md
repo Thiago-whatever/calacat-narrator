@@ -26,6 +26,17 @@ Static Web Apps with the Function App as a linked backend (ADR-036), so `/api/*`
 redirects anonymous users to sign in, and sets a CSP that allows only `'self'` and `wss://*.webpubsub.azure.com`.
 Fonts are bundled from `@fontsource`, so the page makes no third-party requests.
 
+## Deploy (GitHub Pages)
+
+`.github/workflows/deploy-web.yml` lints, tests, builds and publishes `web/` on every push to `main` that touches it (or on demand from the Actions tab).
+The site is served at `https://<owner>.github.io/<repo>/`; the workflow passes that base path to the build.
+
+One-time setup:
+
+1. The repository must be public (GitHub Pages on a free plan; the hackathon rules also require it).
+2. **Settings → Pages → Source: GitHub Actions.**
+3. Optional live mode: add the repository variable `VITE_API_BASE_URL` (Function App origin) and allow `https://<owner>.github.io` in the Function App's CORS.
+
 ## Structure
 
 Built on MUI (Material UI) with Emotion. All styling flows from one theme; no stylesheet files.
