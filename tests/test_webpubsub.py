@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 
 import azure.functions as func
+import pytest
 from azure.core.exceptions import ServiceRequestError
 
 import function_app
@@ -38,16 +39,28 @@ def cosmos_document(stored: Card) -> dict[str, object]:
     return document
 
 
+@pytest.fixture(autouse=True)
+def clear_url_cache():
+    webpubsub._cached_client_access_url.cache_clear()
+    yield
+    webpubsub._cached_client_access_url.cache_clear()
+
+
 class FakeClient:
-    def __init__(self) -> None:
+    def __init__(self, fail_groups: tuple[str, ...] = ()) -> None:
         self.sent: list[tuple[str, dict[str, object], str]] = []
         self.token_kwargs: dict[str, object] = {}
+        self.token_calls = 0
+        self.fail_groups = fail_groups
 
     def send_to_group(self, group: str, message: dict[str, object], *, content_type: str) -> None:
+        if group in self.fail_groups:
+            raise ServiceRequestError("down")
         self.sent.append((group, message, content_type))
 
     def get_client_access_token(self, **kwargs: object) -> dict[str, str]:
         self.token_kwargs = kwargs
+        self.token_calls += 1
         return {"url": "wss://example.webpubsub.azure.com/client/hubs/cards?access_token=t"}
 
 
@@ -73,6 +86,28 @@ def test_push_cards_sends_live_cards_to_their_match_group(monkeypatch) -> None:
     function_app.push_cards([cosmos_document(expired), cosmos_document(live)])
 
     assert client.sent == [("match-m-0008", live.model_dump(mode="json"), "application/json")]
+
+
+def test_publish_cards_sends_the_rest_then_raises_when_one_fails(monkeypatch) -> None:
+    client = FakeClient(fail_groups=("match-m-0007",))
+    monkeypatch.setattr(webpubsub, "_client", lambda: client)
+    bad = card("candidate-bad", match_id="m-0007")
+    good = card("candidate-good", match_id="m-0008")
+
+    with pytest.raises(RuntimeError):
+        webpubsub.publish_cards([bad, good])
+
+    assert [group for group, _, _ in client.sent] == ["match-m-0008"]
+
+
+def test_negotiate_reuses_one_url_per_match(monkeypatch) -> None:
+    client = FakeClient()
+    monkeypatch.setattr(webpubsub, "_client", lambda: client)
+
+    for _ in range(3):
+        assert function_app.negotiate(negotiate_request("m-0007")).status_code == 200
+
+    assert client.token_calls == 1
 
 
 def test_negotiate_issues_receive_only_token_for_one_group(monkeypatch) -> None:

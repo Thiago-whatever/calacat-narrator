@@ -57,7 +57,7 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 | Push cards to browsers (C12) | ✅ |
 | UI: Reporter (C13), Overlay (C14), Fan (C15) | ❌ |
 | Kick-off endpoint (C16), FT recap (C17) | ❌ |
-| CI (C25) | ❌ (tests only run locally: 67 passing, ruff clean) |
+| CI (C25) | ❌ (tests only run locally: 74 passing, ruff clean) |
 | Deploy + smoke test (D1), public repo (G1), submission (S1) | ❌ |
 
 **Critical path left:** C12 → C13 → D1 → S1, plus G1. It's Oct 26 and the deadline is Oct 27 11:59 pm PT, so treat everything outside that path as optional.
