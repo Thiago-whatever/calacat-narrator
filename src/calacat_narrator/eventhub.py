@@ -26,6 +26,6 @@ def _producer() -> EventHubProducerClient:
 def publish_event(event: MatchEvent) -> None:
     """Send one validated event using the Function App's managed identity."""
     producer = _producer()
-    batch = producer.create_batch()
+    batch = producer.create_batch(partition_key=event.match_id)
     batch.add(EventData(json.dumps(event.model_dump(mode="json", exclude_none=True))))
     producer.send_batch(batch)

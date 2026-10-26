@@ -4,6 +4,7 @@ param functionPrincipalId string
 param containerAppsIdentityPrincipalId string
 param storageAccountName string
 param cosmosAccountName string
+param cosmosDatabaseName string
 param eventHubNamespaceName string
 param serviceBusNamespaceName string
 param serviceBusTopicName string
@@ -147,10 +148,10 @@ resource containerAppsAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-
 
 resource functionCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-04-15' = {
   parent: cosmosAccount
-  name: guid(cosmosAccount.id, functionPrincipalId, cosmosBuiltInDataContributorRoleId)
+  name: guid(cosmosAccount.id, cosmosDatabaseName, functionPrincipalId, cosmosBuiltInDataContributorRoleId)
   properties: {
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
     principalId: functionPrincipalId
-    scope: cosmosAccount.id
+    scope: '/dbs/${cosmosDatabaseName}'
   }
 }

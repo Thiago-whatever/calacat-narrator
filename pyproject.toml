@@ -11,6 +11,7 @@ dependencies = [
     "azure-eventhub>=5.12,<6",
     "azure-functions>=1.21,<2",
     "azure-identity>=1.17,<2",
+    "azure-cosmos>=4.7,<5",
     "pydantic>=2.7,<3",
 ]
 

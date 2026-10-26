@@ -5,10 +5,14 @@ import logging
 
 import azure.functions as func
 from azure.core.exceptions import AzureError
+from azure.cosmos.exceptions import CosmosHttpResponseError
 from pydantic import ValidationError
 
+from calacat_narrator.cosmos import get_match_container
 from calacat_narrator.eventhub import publish_event
 from calacat_narrator.ingest import MAX_INGEST_BODY_BYTES, parse_event
+from calacat_narrator.interpreter import update_match_state
+from calacat_narrator.schemas import MatchEvent
 
 logger = logging.getLogger(__name__)
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -48,3 +52,31 @@ def ingest(req: func.HttpRequest) -> func.HttpResponse:
         return _json_response({"error": "event_hub_unavailable"}, 503)
 
     return _json_response({"event_id": event.event_id, "status": "accepted"}, 202)
+
+
+@app.event_hub_message_trigger(
+    arg_name="events",
+    event_hub_name="%EVENTHUB_NAME%",
+    connection="EVENTHUB_CONNECTION",
+    cardinality="many",
+)
+def interpret(events: list[func.EventHubEvent]) -> None:
+    """Update durable match aggregates from an ordered Event Hubs batch."""
+    container = get_match_container()
+    for received_event in events:
+        try:
+            event = MatchEvent.model_validate_json(received_event.get_body())
+        except ValidationError as error:
+            logger.error(
+                "Discarding invalid Event Hubs event: %s",
+                error.errors(include_input=False, include_context=False)[:10],
+            )
+            continue
+
+        try:
+            applied = update_match_state(container, event)
+        except CosmosHttpResponseError:
+            logger.exception("Failed to update match state for %s", event.match_id)
+            raise
+        if not applied:
+            logger.info("Skipping duplicate or stale event %s", event.event_id)

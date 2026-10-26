@@ -78,6 +78,8 @@ module compute 'modules/compute.bicep' = {
     containerAppsIdentityName: 'id-${baseName}'
     storageAccountName: data.outputs.storageAccountName
     cosmosEndpoint: data.outputs.cosmosEndpoint
+    cosmosDatabaseName: data.outputs.cosmosDatabaseName
+    cosmosContainerName: data.outputs.cosmosContainerName
     eventHubNamespaceName: messaging.outputs.eventHubNamespaceName
     eventHubName: messaging.outputs.eventHubName
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
@@ -98,6 +100,7 @@ module roles 'modules/roles.bicep' = {
     containerAppsIdentityPrincipalId: compute.outputs.containerAppsIdentityPrincipalId
     storageAccountName: data.outputs.storageAccountName
     cosmosAccountName: data.outputs.cosmosAccountName
+    cosmosDatabaseName: data.outputs.cosmosDatabaseName
     eventHubNamespaceName: messaging.outputs.eventHubNamespaceName
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
