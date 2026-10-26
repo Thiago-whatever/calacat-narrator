@@ -31,6 +31,7 @@ class EntityAggregate(BaseModel):
     passes_attempted: int = 0
     passes_completed: int = 0
     current_pass_streak: int = 0
+    current_pass_streak_event_ids: list[str] = Field(default_factory=list)
     longest_pass_streak: int = 0
     yellow_cards: int = 0
     red_cards: int = 0
@@ -56,6 +57,7 @@ class MatchState(BaseModel):
     event_count: int = 0
     sequence_gaps: int = 0
     possession_team_id: str | None = None
+    team_pass_streak_players: dict[str, list[str]] = Field(default_factory=dict)
     score: dict[str, int] = Field(default_factory=dict)
     team_stats: dict[str, EntityAggregate] = Field(default_factory=dict)
     player_stats: dict[str, EntityAggregate] = Field(default_factory=dict)
@@ -93,16 +95,35 @@ def apply_event(state: MatchState | None, event: MatchEvent) -> tuple[MatchState
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.passes_attempted += 1
-                if payload.outcome == "complete":
+        if payload.outcome == "complete":
+            if event.team_id is not None:
+                _set_possession(state, event.team_id)
+            for aggregate in (team_stats, player_stats):
+                if aggregate is not None:
                     aggregate.passes_completed += 1
                     aggregate.current_pass_streak += 1
+                    aggregate.current_pass_streak_event_ids.append(event.event_id)
                     aggregate.longest_pass_streak = max(
                         aggregate.longest_pass_streak,
                         aggregate.current_pass_streak,
                     )
-                else:
-                    aggregate.current_pass_streak = 0
+            if event.team_id is not None and event.player_id is not None:
+                players = state.team_pass_streak_players.setdefault(event.team_id, [])
+                if event.player_id not in players:
+                    players.append(event.player_id)
+        else:
+            if event.team_id is not None:
+                _reset_team_pass_streak(state, event.team_id)
+                if state.possession_team_id == event.team_id:
+                    state.possession_team_id = None
+            _reset_entity_pass_streak(player_stats)
     elif isinstance(payload, ShotPayload):
+        if state.possession_team_id is not None:
+            _reset_team_pass_streak(state, state.possession_team_id)
+        if event.team_id is not None:
+            _reset_team_pass_streak(state, event.team_id)
+        _reset_entity_pass_streak(player_stats)
+        state.possession_team_id = None
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.shots += 1
@@ -120,10 +141,20 @@ def apply_event(state: MatchState | None, event: MatchEvent) -> tuple[MatchState
                 else:
                     aggregate.red_cards += 1
     elif isinstance(payload, PossessionChangePayload):
+        _reset_team_pass_streak(state, payload.from_team)
+        _reset_team_pass_streak(state, payload.to_team)
+        if state.possession_team_id is not None:
+            _reset_team_pass_streak(state, state.possession_team_id)
         state.possession_team_id = payload.to_team
         if team_stats is not None:
             team_stats.possession_changes += 1
     elif isinstance(payload, DuelPayload):
+        if payload.won and event.team_id is not None:
+            _set_possession(state, event.team_id)
+        elif not payload.won and event.team_id is not None:
+            _reset_team_pass_streak(state, event.team_id)
+            if state.possession_team_id == event.team_id:
+                state.possession_team_id = None
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.duels += 1
@@ -135,14 +166,23 @@ def apply_event(state: MatchState | None, event: MatchEvent) -> tuple[MatchState
         if target_stats is not None:
             target_stats.pressures += 1
     elif isinstance(payload, FoulPayload):
+        if event.team_id is not None:
+            _reset_team_pass_streak(state, event.team_id)
+        if state.possession_team_id is not None:
+            _reset_team_pass_streak(state, state.possession_team_id)
+        state.possession_team_id = None
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.fouls += 1
     elif isinstance(payload, SetPiecePayload):
+        if event.team_id is not None:
+            _set_possession(state, event.team_id)
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.set_pieces += 1
     elif isinstance(payload, GoalkeeperActionPayload):
+        if event.team_id is not None:
+            _set_possession(state, event.team_id)
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.goalkeeper_actions += 1
@@ -152,6 +192,26 @@ def apply_event(state: MatchState | None, event: MatchEvent) -> tuple[MatchState
             _get_aggregate(state.player_stats, player_id)
 
     return state, True
+
+
+def _reset_entity_pass_streak(aggregate: EntityAggregate | None) -> None:
+    if aggregate is not None:
+        aggregate.current_pass_streak = 0
+        aggregate.current_pass_streak_event_ids.clear()
+
+
+def _reset_team_pass_streak(state: MatchState, team_id: str) -> None:
+    _reset_entity_pass_streak(state.team_stats.get(team_id))
+    for player_id in state.team_pass_streak_players.pop(team_id, []):
+        _reset_entity_pass_streak(state.player_stats.get(player_id))
+
+
+def _set_possession(state: MatchState, team_id: str) -> None:
+    if state.possession_team_id != team_id:
+        if state.possession_team_id is not None:
+            _reset_team_pass_streak(state, state.possession_team_id)
+        _reset_team_pass_streak(state, team_id)
+    state.possession_team_id = team_id
 
 
 def _get_aggregate(
