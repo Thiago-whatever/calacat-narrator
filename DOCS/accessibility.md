@@ -11,7 +11,7 @@ The goal is that every fan can follow and *understand* the match, whatever langu
 - **Audio narration mode:** Azure AI Speech neural voices read cards in the user's language.
 - **Every chart has a text alternative**, generated from the same data ("Heatmap: Rivas spent 41% of the first half in the left half-space").
 - High-contrast theme, a colorblind-safe palette, and no meaning carried by color alone.
-- The reporter flow works keyboard-only: J/K to move, Enter to send to air, Esc to pull from air.
+- The reporter flow works keyboard-only: J/K to move, Enter to start the 5-second go-live countdown, Esc to cancel it or pull from air (see [design.md](design.md)).
 
 ## Cognitive and low vision
 - Respects `prefers-reduced-motion`, and cards don't auto-scroll while focused.

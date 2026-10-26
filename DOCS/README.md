@@ -11,6 +11,7 @@ Built on Azure (Event Hubs, Functions, Service Bus, Cosmos DB, Container Apps, W
 | [decisions.md](decisions.md) | ADR log: every important decision, why, how it could be wrong |
 | [data-model.md](data-model.md) | Event schemas, coordinates, zones, simulator, signal thresholds |
 | [accessibility.md](accessibility.md) | Language, visual, cognitive accessibility, empowerment |
+| [design.md](design.md) | Visual system and Reporter console spec |
 | [roadmap.md](roadmap.md) | MVP vs stretch vs cut, day plan, submission checklist |
 | [delivery.md](delivery.md) | Copilot workflow, CI/CD, hosting, judge access, cost, security |
 | [progress.md](progress.md) | What is done, what is missing, setup commands |
