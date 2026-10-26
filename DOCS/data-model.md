@@ -59,15 +59,23 @@ file because `/ingest` accepts event envelopes.
 
 ## Signals (Interpreter → Service Bus)
 ```json
-{ "signal_id": "...", "match_id": "...", "kind": "pass_streak", "match_clock_s": 2210,
-  "entity": {"team_id": "t-home"}, "value": 17, "baseline": {"mean": 6.1, "p95": 13},
-  "evidence_event_ids": ["..."], "tier": 2 }
+{ "signal_id": "...", "match_id": "m-0007", "kind": "goal", "match_clock_s": 4020,
+  "entity": {"team_id": "t-home"}, "value": 2,
+  "event_context": {"event_type": "shot", "event_id": "evt-0042", "period": 2,
+    "outcome": "goal", "speed_kmh": 104, "xg": 0.74, "body_part": "foot"},
+  "evidence_event_ids": ["evt-0042"], "tier": 1 }
 ```
 Gate rules live in `src/calacat_narrator/data/signals.yaml` (ADR-013): `min_sample`,
 `min_clock_s`, `milestones[]`, `hysteresis`, and `cooldown_s`. The current MVP uses
 absolute thresholds; critical goal, red-card, and penalty events bypass the gate.
 Threshold signals and critical signals are published to the Service Bus `signals`
 topic with deterministic message IDs and evidence event IDs.
+
+Goal and penalty signals also carry a bounded, typed `event_context` copied from the
+single evidence event: shot outcome, xG, speed, body part, period, or penalty intent.
+The Goal & Shot specialist can use these values for its narrative; the application
+adds verified `xg` and `shot_speed_kmh` to candidate metrics for goal evidence. Other
+signals omit `event_context`, and signal/candidate evidence IDs remain application-owned.
 
 The Interpreter consumes Event Hubs in match-keyed partitions and stores one Cosmos DB
 document per match in the `calacat/match-state` container, partitioned by `match_id`.
@@ -97,7 +105,7 @@ detection on the `candidates` topic.
   "match_id": "m-0007",
   "headline": "A second goal changes the balance",
   "why_it_matters": "The home side has now scored twice.",
-  "metrics": { "goal": 2 },
+  "metrics": { "goal": 2, "shot_speed_kmh": 104, "xg": 0.74 },
   "evidence_event_ids": ["evt-0042"],
   "entity_ids": ["t-home"],
   "topic": "goal",

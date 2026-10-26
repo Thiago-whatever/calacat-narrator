@@ -67,9 +67,39 @@ def test_critical_goal_bypasses_clock_and_sample_gates() -> None:
     assert signal.kind == "goal"
     assert signal.tier == 1
     assert signal.evidence_event_ids == [event.event_id]
+    assert signal.event_context is not None
+    assert signal.event_context.event_type == "shot"
+    assert signal.event_context.event_id == event.event_id
+    assert signal.event_context.speed_kmh == 90
+    assert signal.event_context.xg == 0.4
+    assert signal.event_context.period == 1
     repeated_state, _ = apply_event(None, event)
     repeated = evaluate_signals(repeated_state, event, load_signal_rules())[0]
     assert repeated.signal_id == signal.signal_id
+
+
+def test_critical_penalty_includes_evidenced_award_context() -> None:
+    event = make_event(
+        1,
+        "set_piece",
+        {
+            "kind": "penalty",
+            "intent": "shot",
+            "first_contact_x": 95,
+            "first_contact_y": 34,
+            "first_contact_player_id": "p-nbr-10",
+        },
+    )
+    state, _ = apply_event(None, event)
+
+    signal = evaluate_signals(state, event, load_signal_rules())[0]
+
+    assert signal.kind == "penalty"
+    assert signal.event_context is not None
+    assert signal.event_context.event_type == "set_piece"
+    assert signal.event_context.event_id == event.event_id
+    assert signal.event_context.kind == "penalty"
+    assert signal.event_context.intent == "shot"
 
 
 def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:

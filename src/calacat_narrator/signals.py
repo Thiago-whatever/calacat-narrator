@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from importlib.resources import files
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, uuid5
 
 import yaml
@@ -63,6 +63,34 @@ class SignalConfig(BaseModel):
     rules: list[SignalRule] = Field(min_length=1)
 
 
+class ShotEventContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    event_type: Literal["shot"] = "shot"
+    event_id: str = Field(min_length=1, max_length=64)
+    period: Literal[1, 2]
+    outcome: Literal["goal", "saved", "off", "blocked"]
+    speed_kmh: float = Field(ge=0, le=250)
+    xg: float = Field(ge=0, le=1)
+    body_part: Literal["foot", "head", "other"]
+
+
+class PenaltyEventContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    event_type: Literal["set_piece"] = "set_piece"
+    event_id: str = Field(min_length=1, max_length=64)
+    period: Literal[1, 2]
+    kind: Literal["penalty"] = "penalty"
+    intent: Literal["pass", "cross", "shot"]
+
+
+SignalEventContext = Annotated[
+    ShotEventContext | PenaltyEventContext,
+    Field(discriminator="event_type"),
+]
+
+
 class Signal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -73,7 +101,23 @@ class Signal(BaseModel):
     entity: dict[Literal["team_id", "player_id"], EntityId] = Field(min_length=1, max_length=1)
     value: int = Field(ge=0)
     evidence_event_ids: list[str] = Field(min_length=1, max_length=100)
+    event_context: SignalEventContext | None = None
     tier: Literal[1, 2]
+
+    @model_validator(mode="after")
+    def validate_event_context(self) -> "Signal":
+        if self.event_context is None:
+            return self
+        if self.event_context.event_id not in self.evidence_event_ids:
+            raise ValueError("event context ID must be included in signal evidence")
+        if isinstance(self.event_context, ShotEventContext):
+            if self.kind not in {"goal", "shot"}:
+                raise ValueError("shot event context requires a goal or shot signal")
+            if self.kind == "goal" and self.event_context.outcome != "goal":
+                raise ValueError("goal signal event context must describe a goal")
+        elif self.kind != "penalty":
+            raise ValueError("set-piece event context requires a penalty signal")
+        return self
 
 
 @lru_cache(maxsize=1)
@@ -216,6 +260,23 @@ def _create_signal(
         "team_id" if rule.entity == "team" else "player_id"
     )
     unique_key = f"{state.match_id}:{rule.kind}:{event.event_id}:{entity_id}:{milestone or ''}"
+    event_context: SignalEventContext | None = None
+    if rule.kind == "goal" and isinstance(event.payload, ShotPayload):
+        event_context = ShotEventContext(
+            event_id=event.event_id,
+            period=event.period,
+            outcome=event.payload.outcome,
+            speed_kmh=event.payload.speed_kmh,
+            xg=event.payload.xg,
+            body_part=event.payload.body_part,
+        )
+    elif rule.kind == "penalty" and isinstance(event.payload, SetPiecePayload):
+        event_context = PenaltyEventContext(
+            event_id=event.event_id,
+            period=event.period,
+            kind=event.payload.kind,
+            intent=event.payload.intent,
+        )
     return Signal(
         signal_id=str(uuid5(NAMESPACE_URL, unique_key)),
         match_id=state.match_id,
@@ -224,5 +285,6 @@ def _create_signal(
         entity={entity_key: entity_id},
         value=value,
         evidence_event_ids=evidence_event_ids,
+        event_context=event_context,
         tier=1 if critical else 2,
     )

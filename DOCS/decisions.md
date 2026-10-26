@@ -174,6 +174,12 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 
 **Revisit when:** Adding a specialist prompt, changing the Foundry deployment, or moving to transactional outbox semantics.
 
+## ADR-026 — Ground Goal & Shot narratives in bounded event evidence
+- **Decision:** Goal and penalty signals carry a typed copy of their source event's relevant shot or set-piece context. The Goal & Shot specialist receives a role-specific prompt, while application code attaches shot speed and xG to candidate metrics.
+- **Why:** Aggregate goal counts alone cannot support chance-quality or shot-speed narration; keeping event context tied to an evidence ID allows those claims without giving the model authority over metrics or provenance.
+- **How it could be wrong:** Copying context into signals duplicates a small amount of event data, and shot-volume signals still summarize counts rather than every underlying shot.
+- **Revisit when:** The specialist receives match-stat MCP tools or a new signal contract provides richer evidence.
+
 ## ADR-029 — Possession-scoped pass streaks
 - **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
 - **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.
