@@ -143,3 +143,13 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 **How it could be wrong:** A partition key concentrates one match's traffic on one partition, and a single document may become a contention point at higher event rates.
 
 **Revisit when:** Per-match throughput or Cosmos conflict rates become material; then partition aggregates by match plus entity or use an append-only event ledger.
+
+## ADR-023 — Publish gated signals before committing match state
+
+**Decision:** Evaluate signal gates from the proposed state and publish to Service Bus before committing the corresponding Cosmos update; use deterministic signal IDs with the topic's duplicate detection.
+
+**Why:** A failed publish leaves the Event Hubs event uncheckpointed and retryable, avoiding a committed aggregate with a silently lost signal.
+
+**How it could be wrong:** Service Bus may accept a signal before a later Cosmos conflict or failure; duplicate detection limits but does not eliminate duplicates beyond its configured history window.
+
+**Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.

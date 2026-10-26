@@ -63,7 +63,11 @@ file because `/ingest` accepts event envelopes.
   "entity": {"team_id": "t-home"}, "value": 17, "baseline": {"mean": 6.1, "p95": 13},
   "evidence_event_ids": ["..."], "tier": 2 }
 ```
-Gate rules live in `signals.yaml` (ADR-013): `min_sample`, `min_clock_s`, `deviation (sigma | percentile)`, `milestones[]`, `window_s + hysteresis`, `cooldown_s`. Critical kinds (goal, red card, penalty) bypass the gate.
+Gate rules live in `src/calacat_narrator/data/signals.yaml` (ADR-013): `min_sample`,
+`min_clock_s`, `milestones[]`, `hysteresis`, and `cooldown_s`. The current MVP uses
+absolute thresholds; critical goal, red-card, and penalty events bypass the gate.
+Threshold signals and critical signals are published to the Service Bus `signals`
+topic with deterministic message IDs and evidence event IDs.
 
 The Interpreter consumes Event Hubs in match-keyed partitions and stores one Cosmos DB
 document per match in the `calacat/match-state` container, partitioned by `match_id`.

@@ -58,7 +58,7 @@ resource signalsTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' = {
 var specialistSubscriptions = [
   {
     name: 'goal-shot'
-    filter: 'kind IN (\'goal\', \'shot\', \'penalty\')'
+    filter: 'kind IN (\'goal\', \'shot\', \'penalty\', \'red_card\', \'shot_volume\')'
   }
   {
     name: 'buildup-passing'

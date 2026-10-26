@@ -11,8 +11,10 @@ from pydantic import ValidationError
 from calacat_narrator.cosmos import get_match_container
 from calacat_narrator.eventhub import publish_event
 from calacat_narrator.ingest import MAX_INGEST_BODY_BYTES, parse_event
-from calacat_narrator.interpreter import update_match_state
+from calacat_narrator.interpreter import MatchState, update_match_state
 from calacat_narrator.schemas import MatchEvent
+from calacat_narrator.servicebus import publish_signals
+from calacat_narrator.signals import evaluate_signals, load_signal_rules
 
 logger = logging.getLogger(__name__)
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -73,8 +75,12 @@ def interpret(events: list[func.EventHubEvent]) -> None:
             )
             continue
 
+        def publish_for_state(state: MatchState, match_event: MatchEvent) -> None:
+            signals = evaluate_signals(state, match_event, load_signal_rules())
+            publish_signals(signals)
+
         try:
-            applied = update_match_state(container, event)
+            applied = update_match_state(container, event, before_persist=publish_for_state)
         except CosmosHttpResponseError:
             logger.exception("Failed to update match state for %s", event.match_id)
             raise
