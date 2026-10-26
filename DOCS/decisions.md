@@ -173,3 +173,9 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 **How it could be wrong:** The generic prompt may be too broad for specialist-quality analysis, and retries can still duplicate work or output after Service Bus duplicate detection expires.
 
 **Revisit when:** Adding a specialist prompt, changing the Foundry deployment, or moving to transactional outbox semantics.
+
+## ADR-026 — Ground Goal & Shot narratives in bounded event evidence
+- **Decision:** Goal and penalty signals carry a typed copy of their source event's relevant shot or set-piece context. The Goal & Shot specialist receives a role-specific prompt, while application code attaches shot speed and xG to candidate metrics.
+- **Why:** Aggregate goal counts alone cannot support chance-quality or shot-speed narration; keeping event context tied to an evidence ID allows those claims without giving the model authority over metrics or provenance.
+- **How it could be wrong:** Copying context into signals duplicates a small amount of event data, and shot-volume signals still summarize counts rather than every underlying shot.
+- **Revisit when:** The specialist receives match-stat MCP tools or a new signal contract provides richer evidence.

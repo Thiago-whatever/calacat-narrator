@@ -80,7 +80,7 @@ resource editorSubscription 'Microsoft.ServiceBus/namespaces/topics/subscription
 var specialistSubscriptions = [
   {
     name: 'goal-shot'
-    filter: 'kind IN (\'goal\', \'shot\', \'penalty\', \'red_card\', \'shot_volume\')'
+    filter: 'kind IN (\'goal\', \'penalty\', \'shot_volume\')'
   }
   {
     name: 'buildup-passing'
