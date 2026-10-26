@@ -9,7 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .interpreter import EntityAggregate, MatchState, SignalGateState
-from .schemas import CardPayload, MatchEvent, SetPiecePayload, ShotPayload
+from .schemas import CardPayload, EntityId, MatchEvent, MatchId, SetPiecePayload, ShotPayload
 
 Metric = Literal[
     "current_pass_streak",
@@ -66,13 +66,13 @@ class SignalConfig(BaseModel):
 class Signal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    signal_id: str
-    match_id: str
-    kind: str
-    match_clock_s: int
-    entity: dict[str, str]
-    value: int
-    evidence_event_ids: list[str]
+    signal_id: str = Field(min_length=1, max_length=64)
+    match_id: MatchId
+    kind: str = Field(min_length=1, max_length=64)
+    match_clock_s: int = Field(ge=0)
+    entity: dict[Literal["team_id", "player_id"], EntityId] = Field(min_length=1, max_length=1)
+    value: int = Field(ge=0)
+    evidence_event_ids: list[str] = Field(min_length=1, max_length=100)
     tier: Literal[1, 2]
 
 
@@ -212,7 +212,9 @@ def _create_signal(
     critical: bool,
     milestone: int | None = None,
 ) -> Signal:
-    entity_key = "team_id" if rule.entity == "team" else "player_id"
+    entity_key: Literal["team_id", "player_id"] = (
+        "team_id" if rule.entity == "team" else "player_id"
+    )
     unique_key = f"{state.match_id}:{rule.kind}:{event.event_id}:{entity_id}:{milestone or ''}"
     return Signal(
         signal_id=str(uuid5(NAMESPACE_URL, unique_key)),

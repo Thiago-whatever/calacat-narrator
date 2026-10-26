@@ -17,6 +17,9 @@ param foundryAccountName string = 'calacat-narrator'
 @description('Name of the existing Microsoft Foundry project.')
 param foundryProjectName string = 'proj-default'
 
+@description('Name of the existing Foundry model deployment used for narrative candidates.')
+param foundryModelDeploymentName string = 'narrator-chat'
+
 var environmentToken = take(replace(toLower(environmentName), '-', ''), 8)
 var nameSuffix = take(uniqueString(subscription().id, resourceGroup().id, environmentName), 8)
 var baseName = 'calacat${environmentToken}${nameSuffix}'
@@ -84,11 +87,14 @@ module compute 'modules/compute.bicep' = {
     eventHubName: messaging.outputs.eventHubName
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
+    serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
+    serviceBusSignalSubscriptionName: 'goal-shot'
     webPubSubHostName: observability.outputs.webPubSubHostName
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     foundryAccountResourceId: foundryAccount.id
     foundryProjectResourceId: foundryProject.id
     foundryProjectEndpoint: foundryProject.properties.endpoints['AI Foundry API']
+    foundryModelDeploymentName: foundryModelDeploymentName
     tags: tags
   }
 }
@@ -104,6 +110,8 @@ module roles 'modules/roles.bicep' = {
     eventHubNamespaceName: messaging.outputs.eventHubNamespaceName
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
+    serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
+    serviceBusSignalSubscriptionName: 'goal-shot'
     webPubSubName: observability.outputs.webPubSubName
     containerRegistryName: compute.outputs.containerRegistryName
   }
@@ -129,7 +137,9 @@ output eventHubNamespaceName string = messaging.outputs.eventHubNamespaceName
 output eventHubName string = messaging.outputs.eventHubName
 output serviceBusNamespaceName string = messaging.outputs.serviceBusNamespaceName
 output serviceBusTopicName string = messaging.outputs.serviceBusTopicName
+output candidatesTopicName string = messaging.outputs.candidatesTopicName
 output webPubSubName string = observability.outputs.webPubSubName
+output agentRuntimeName string = compute.outputs.agentRuntimeName
 output foundryAccountResourceId string = foundryAccount.id
 output foundryProjectResourceId string = foundryProject.id
 output foundryProjectEndpoint string = foundryProject.properties.endpoints['AI Foundry API']

@@ -55,6 +55,28 @@ resource signalsTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' = {
   }
 }
 
+resource candidatesTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' = {
+  parent: serviceBusNamespace
+  name: 'candidates'
+  properties: {
+    defaultMessageTimeToLive: 'PT5M'
+    duplicateDetectionHistoryTimeWindow: 'PT10M'
+    enablePartitioning: true
+    requiresDuplicateDetection: true
+  }
+}
+
+resource editorSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' = {
+  parent: candidatesTopic
+  name: 'editor'
+  properties: {
+    deadLetteringOnMessageExpiration: true
+    defaultMessageTimeToLive: 'PT5M'
+    lockDuration: 'PT1M'
+    maxDeliveryCount: 5
+  }
+}
+
 var specialistSubscriptions = [
   {
     name: 'goal-shot'
@@ -108,3 +130,5 @@ output serviceBusNamespaceName string = serviceBusNamespace.name
 output serviceBusNamespaceId string = serviceBusNamespace.id
 output serviceBusTopicName string = signalsTopic.name
 output serviceBusTopicId string = signalsTopic.id
+output candidatesTopicName string = candidatesTopic.name
+output candidatesTopicId string = candidatesTopic.id

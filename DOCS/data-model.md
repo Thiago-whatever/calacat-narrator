@@ -74,3 +74,34 @@ document per match in the `calacat/match-state` container, partitioned by `match
 Documents include the latest sequence and event ID, clock/period, score, possession,
 and team/player counters for passes, shots, goals, cards, duels, fouls, and other events.
 Repeated or stale sequence numbers are ignored; Cosmos ETags protect concurrent writes.
+
+## Agent candidates and cards
+
+The Container Apps agent runtime consumes one configured filtered subscription from
+`signals` using Entra ID. It asks the Foundry `narrator-chat` deployment for only the
+candidate headline, explanation, and salience, with low reasoning effort and a Pydantic
+structured response. The application attaches the validated signal's metric, entity,
+match clock, and evidence IDs; the model cannot replace that provenance. Candidate IDs
+are deterministic per specialist and signal, so retries use Service Bus duplicate
+detection on the `candidates` topic.
+
+```json
+{
+  "candidate_id": "uuid",
+  "signal_id": "uuid",
+  "match_id": "m-0007",
+  "headline": "A second goal changes the balance",
+  "why_it_matters": "The home side has now scored twice.",
+  "metrics": { "goal": 2 },
+  "evidence_event_ids": ["evt-0042"],
+  "entity_ids": ["t-home"],
+  "topic": "goal",
+  "self_salience": 0.8,
+  "ttl_s": 180,
+  "match_clock_s": 4020
+}
+```
+
+The `Card` contract adds a stable `card_id`, display `body`, and UTC `created_at` /
+`expires_at` timestamps derived from `ttl_s`. It is defined for the Editor and browser
+delivery stages; those stages own ranking, persistence, and publication.
