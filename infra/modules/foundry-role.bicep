@@ -18,3 +18,16 @@ resource containerAppsFoundryRole 'Microsoft.Authorization/roleAssignments@2022-
     principalType: 'ServicePrincipal'
   }
 }
+
+// The agents call the model through the Foundry project endpoint, which needs project data actions.
+var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+
+resource containerAppsFoundryUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, containerAppsIdentityPrincipalId, foundryUserRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryUserRoleId)
+    principalId: containerAppsIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
