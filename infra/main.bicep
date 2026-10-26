@@ -126,7 +126,6 @@ module roles 'modules/roles.bicep' = {
     serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing']
     serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'tactical', 'player-milestones']
     webPubSubName: observability.outputs.webPubSubName
-    containerRegistryName: compute.outputs.containerRegistryName
   }
 }
 

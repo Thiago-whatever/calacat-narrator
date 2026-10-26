@@ -29,6 +29,7 @@ param tags object
 
 // The registry is empty on first provision; later provisions keep what azd deployed.
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   name: containerRegistryName
@@ -50,6 +51,17 @@ resource containerAppsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
   tags: tags
 }
 
+// Container Apps validate registry access when a revision is created, so AcrPull must exist before them.
+resource containerAppsAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, containerAppsIdentity.id, acrPullRoleId)
+  scope: containerRegistry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: containerAppsIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: containerAppsEnvironmentName
   location: location
@@ -66,6 +78,9 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01'
 
 resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
   for subscriptionName in serviceBusSignalSubscriptionNames: {
+    dependsOn: [
+      containerAppsAcrPullRole
+    ]
     name: subscriptionName == 'goal-shot'
       ? 'agent-${containerAppsEnvironmentName}'
       : 'agent-b-${take(containerAppsEnvironmentName, 15)}-${take(uniqueString(subscriptionName, containerAppsEnvironmentName), 6)}'
@@ -162,6 +177,9 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
 ]
 
 resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
+  dependsOn: [
+    containerAppsAcrPullRole
+  ]
   name: 'editor-${take(containerAppsEnvironmentName, 20)}'
   location: location
   identity: {
