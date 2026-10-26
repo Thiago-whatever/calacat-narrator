@@ -52,7 +52,7 @@ flowchart LR
 | Player / Milestones | `speed_threshold`, `distance_threshold`, `record` | Player tagging, records |
 | Editor | all candidates + DLQ | Ranked, deduped, rate-limited cards; HT/FT recap trigger |
 
-**Candidate schema:** `{candidate_id, signal_id, match_id, headline, why_it_matters, metrics{}, evidence_event_ids[], entity_ids[], topic, self_salience, ttl_s, match_clock_s}`. The generic Container Apps runtime consumes one configured filtered subscription and publishes candidates for the Editor.
+**Candidate schema:** `{candidate_id, signal_id, match_id, headline, why_it_matters, metrics{}, evidence_event_ids[], entity_ids[], topic, self_salience, ttl_s, match_clock_s}`. Each specialist Container App consumes its configured filtered subscription and publishes candidates for the Editor.
 
 ## Failure handling
 - Each signal has a delivery timeout. After max retries it goes to the **DLQ**.

@@ -88,7 +88,7 @@ module compute 'modules/compute.bicep' = {
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
     serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
-    serviceBusSignalSubscriptionName: 'goal-shot'
+    serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing']
     webPubSubHostName: observability.outputs.webPubSubHostName
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     foundryAccountResourceId: foundryAccount.id
@@ -111,7 +111,7 @@ module roles 'modules/roles.bicep' = {
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
     serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
-    serviceBusSignalSubscriptionName: 'goal-shot'
+    serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing']
     webPubSubName: observability.outputs.webPubSubName
     containerRegistryName: compute.outputs.containerRegistryName
   }

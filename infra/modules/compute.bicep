@@ -13,7 +13,7 @@ param eventHubName string
 param serviceBusNamespaceName string
 param serviceBusTopicName string
 param serviceBusCandidateTopicName string
-param serviceBusSignalSubscriptionName string
+param serviceBusSignalSubscriptionNames array
 param webPubSubHostName string
 param applicationInsightsConnectionString string
 param foundryAccountResourceId string
@@ -56,96 +56,100 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01'
   tags: tags
 }
 
-resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = {
-  name: 'agent-${containerAppsEnvironmentName}'
-  location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${containerAppsIdentity.id}': {}
+resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
+  for subscriptionName in serviceBusSignalSubscriptionNames: {
+    name: subscriptionName == 'goal-shot'
+      ? 'agent-${containerAppsEnvironmentName}'
+      : 'agent-b-${take(containerAppsEnvironmentName, 15)}-${take(uniqueString(subscriptionName, containerAppsEnvironmentName), 6)}'
+    location: location
+    identity: {
+      type: 'UserAssigned'
+      userAssignedIdentities: {
+        '${containerAppsIdentity.id}': {}
+      }
     }
-  }
-  properties: {
-    managedEnvironmentId: containerAppsEnvironment.id
-    configuration: {
-      activeRevisionsMode: 'Single'
-      registries: [
-        {
-          server: containerRegistry.properties.loginServer
-          identity: containerAppsIdentity.id
-        }
-      ]
-    }
-    template: {
-      containers: [
-        {
-          name: 'agent-runtime'
-          image: '${containerRegistry.properties.loginServer}/agent-runtime:latest'
-          resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
-          }
-          env: [
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: containerAppsIdentity.properties.clientId
-            }
-            {
-              name: 'FOUNDRY_PROJECT_ENDPOINT'
-              value: foundryProjectEndpoint
-            }
-            {
-              name: 'FOUNDRY_MODEL'
-              value: foundryModelDeploymentName
-            }
-            {
-              name: 'SERVICEBUS_FULLY_QUALIFIED_NAMESPACE'
-              value: '${serviceBusNamespaceName}.servicebus.windows.net'
-            }
-            {
-              name: 'SERVICEBUS_TOPIC_NAME'
-              value: serviceBusTopicName
-            }
-            {
-              name: 'SERVICEBUS_SUBSCRIPTION_NAME'
-              value: serviceBusSignalSubscriptionName
-            }
-            {
-              name: 'SERVICEBUS_CANDIDATES_TOPIC_NAME'
-              value: serviceBusCandidateTopicName
-            }
-            {
-              name: 'AGENT_NAME'
-              value: serviceBusSignalSubscriptionName
-            }
-          ]
-        }
-      ]
-      scale: {
-        minReplicas: 0
-        maxReplicas: 2
-        rules: [
+    properties: {
+      managedEnvironmentId: containerAppsEnvironment.id
+      configuration: {
+        activeRevisionsMode: 'Single'
+        registries: [
           {
-            name: 'signals'
-            custom: {
-              type: 'azure-servicebus'
-              metadata: {
-                namespace: serviceBusNamespaceName
-                topicName: serviceBusTopicName
-                subscriptionName: serviceBusSignalSubscriptionName
-                messageCount: '1'
-              }
-              identity: containerAppsIdentity.id
-            }
+            server: containerRegistry.properties.loginServer
+            identity: containerAppsIdentity.id
           }
         ]
       }
+      template: {
+        containers: [
+          {
+            name: 'agent-runtime'
+            image: '${containerRegistry.properties.loginServer}/agent-runtime:latest'
+            resources: {
+              cpu: json('0.5')
+              memory: '1Gi'
+            }
+            env: [
+              {
+                name: 'AZURE_CLIENT_ID'
+                value: containerAppsIdentity.properties.clientId
+              }
+              {
+                name: 'FOUNDRY_PROJECT_ENDPOINT'
+                value: foundryProjectEndpoint
+              }
+              {
+                name: 'FOUNDRY_MODEL'
+                value: foundryModelDeploymentName
+              }
+              {
+                name: 'SERVICEBUS_FULLY_QUALIFIED_NAMESPACE'
+                value: '${serviceBusNamespaceName}.servicebus.windows.net'
+              }
+              {
+                name: 'SERVICEBUS_TOPIC_NAME'
+                value: serviceBusTopicName
+              }
+              {
+                name: 'SERVICEBUS_SUBSCRIPTION_NAME'
+                value: subscriptionName
+              }
+              {
+                name: 'SERVICEBUS_CANDIDATES_TOPIC_NAME'
+                value: serviceBusCandidateTopicName
+              }
+              {
+                name: 'AGENT_NAME'
+                value: subscriptionName
+              }
+            ]
+          }
+        ]
+        scale: {
+          minReplicas: 0
+          maxReplicas: 2
+          rules: [
+            {
+              name: 'signals'
+              custom: {
+                type: 'azure-servicebus'
+                metadata: {
+                  namespace: serviceBusNamespaceName
+                  topicName: serviceBusTopicName
+                  subscriptionName: subscriptionName
+                  messageCount: '1'
+                }
+                identity: containerAppsIdentity.id
+              }
+            }
+          ]
+        }
+      }
     }
+    tags: union(tags, {
+      'azd-service-name': subscriptionName == 'goal-shot' ? 'agent-runtime' : 'agent-runtime-buildup-passing'
+    })
   }
-  tags: union(tags, {
-    'azd-service-name': 'agent-runtime'
-  })
-}
+]
 
 resource functionPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: functionPlanName
@@ -266,4 +270,4 @@ output containerAppsEnvironmentName string = containerAppsEnvironment.name
 output containerAppsIdentityResourceId string = containerAppsIdentity.id
 output containerAppsIdentityPrincipalId string = containerAppsIdentity.properties.principalId
 output containerAppsIdentityClientId string = containerAppsIdentity.properties.clientId
-output agentRuntimeName string = agentRuntime.name
+output agentRuntimeName string = agentRuntime[0].name

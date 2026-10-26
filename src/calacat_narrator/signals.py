@@ -9,7 +9,15 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .interpreter import EntityAggregate, MatchState, SignalGateState
-from .schemas import CardPayload, EntityId, MatchEvent, MatchId, SetPiecePayload, ShotPayload
+from .schemas import (
+    CardPayload,
+    EntityId,
+    MatchEvent,
+    MatchId,
+    PassPayload,
+    SetPiecePayload,
+    ShotPayload,
+)
 
 Metric = Literal[
     "current_pass_streak",
@@ -85,8 +93,19 @@ class PenaltyEventContext(BaseModel):
     intent: Literal["pass", "cross", "shot"]
 
 
+class PassEventContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    event_type: Literal["pass"] = "pass"
+    event_id: str = Field(min_length=1, max_length=64)
+    period: Literal[1, 2]
+    outcome: Literal["complete", "incomplete", "out"]
+    difficulty: float = Field(ge=0, le=1)
+    inside_opp_shape: bool
+
+
 SignalEventContext = Annotated[
-    ShotEventContext | PenaltyEventContext,
+    ShotEventContext | PenaltyEventContext | PassEventContext,
     Field(discriminator="event_type"),
 ]
 
@@ -115,6 +134,11 @@ class Signal(BaseModel):
                 raise ValueError("shot event context requires a goal or shot signal")
             if self.kind == "goal" and self.event_context.outcome != "goal":
                 raise ValueError("goal signal event context must describe a goal")
+        elif isinstance(self.event_context, PassEventContext):
+            if self.kind not in {"pass_streak", "pass_milestone", "progression"}:
+                raise ValueError("pass event context requires a passing signal")
+            if self.kind == "pass_streak" and self.event_context.outcome != "complete":
+                raise ValueError("pass streak context must describe a completed pass")
         elif self.kind != "penalty":
             raise ValueError("set-piece event context requires a penalty signal")
         return self
@@ -269,6 +293,16 @@ def _create_signal(
             speed_kmh=event.payload.speed_kmh,
             xg=event.payload.xg,
             body_part=event.payload.body_part,
+        )
+    elif rule.kind in {"pass_streak", "pass_milestone", "progression"} and isinstance(
+        event.payload, PassPayload
+    ):
+        event_context = PassEventContext(
+            event_id=event.event_id,
+            period=event.period,
+            outcome=event.payload.outcome,
+            difficulty=event.payload.difficulty,
+            inside_opp_shape=event.payload.inside_opp_shape,
         )
     elif rule.kind == "penalty" and isinstance(event.payload, SetPiecePayload):
         event_context = PenaltyEventContext(
