@@ -54,7 +54,7 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 | Specialists: Goal & Shot (C9), Build-up & Passing (C10) | ✅ #52, #53 · Player (C19), Tactical (C28) ❌ |
 | Editor + recovery fallback (C11) | ✅ #54 |
 | MCP stats server (C18) | ❌ |
-| Push cards to browsers (C12) | ❌ |
+| Push cards to browsers (C12) | ✅ |
 | UI: Reporter (C13), Overlay (C14), Fan (C15) | ❌ |
 | Kick-off endpoint (C16), FT recap (C17) | ❌ |
 | CI (C25) | ❌ (tests only run locally: 67 passing, ruff clean) |
