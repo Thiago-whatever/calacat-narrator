@@ -1,16 +1,33 @@
 name: calacat-narrator
 services:
-  api:
-    project: .
-    language: python
-    host: function
-  agent-runtime:
+  agent-runtime-buildup-passing:
     project: .
     language: docker
     host: containerapp
     docker:
       path: Dockerfile
       context: .
+      remoteBuild: true
+  editor:
+    project: .
+    language: docker
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
+      remoteBuild: true
+  api:
+    project: .
+    language: python
+    host: function
+  agent-runtime-goal-shot:
+    project: .
+    language: docker
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
+      remoteBuild: true
 infra:
   provider: bicep
   path: infra

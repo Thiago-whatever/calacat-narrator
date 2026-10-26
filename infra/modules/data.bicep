@@ -108,7 +108,18 @@ resource leasesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/con
   }
 }
 
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-01-01' = {
+  parent: storageAccount
+  name: 'default'
+}
+
+resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-01-01' = {
+  parent: blobService
+  name: 'app-package'
+}
+
 output storageAccountName string = storageAccount.name
+output deploymentStorageContainerUrl string = '${storageAccount.properties.primaryEndpoints.blob}${deploymentContainer.name}'
 output storageAccountId string = storageAccount.id
 output cosmosAccountName string = cosmosAccount.name
 output cosmosAccountId string = cosmosAccount.id
