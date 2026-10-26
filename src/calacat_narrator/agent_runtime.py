@@ -1,7 +1,7 @@
 """Foundry-backed candidate generation and downstream card contracts."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, uuid5
 
 from agent_framework import Agent
@@ -68,6 +68,7 @@ class Card(BaseModel):
 
     card_id: str = Field(min_length=1, max_length=64)
     candidate_id: str = Field(min_length=1, max_length=64)
+    signal_id: str = Field(min_length=1, max_length=64)
     match_id: MatchId
     headline: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     body: CandidateText
@@ -76,6 +77,7 @@ class Card(BaseModel):
     entity_ids: list[EntityId] = Field(min_length=1, max_length=2)
     topic: str = Field(min_length=1, max_length=64)
     salience: float = Field(ge=0, le=1)
+    source: Literal["specialist", "fallback"] = "specialist"
     ttl_s: int = Field(ge=1, le=300)
     match_clock_s: int = Field(ge=0)
     created_at: datetime
@@ -96,11 +98,13 @@ class Card(BaseModel):
         candidate: Candidate,
         *,
         created_at: datetime | None = None,
+        source: Literal["specialist", "fallback"] = "specialist",
     ) -> "Card":
         created = created_at or datetime.now(UTC)
         return cls(
             card_id=str(uuid5(NAMESPACE_URL, f"calacat:card:{candidate.candidate_id}")),
             candidate_id=candidate.candidate_id,
+            signal_id=candidate.signal_id,
             match_id=candidate.match_id,
             headline=candidate.headline,
             body=candidate.why_it_matters,
@@ -109,6 +113,7 @@ class Card(BaseModel):
             entity_ids=candidate.entity_ids,
             topic=candidate.topic,
             salience=candidate.self_salience,
+            source=source,
             ttl_s=candidate.ttl_s,
             match_clock_s=candidate.match_clock_s,
             created_at=created,

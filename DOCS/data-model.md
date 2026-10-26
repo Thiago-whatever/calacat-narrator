@@ -116,4 +116,35 @@ detection on the `candidates` topic.
 
 The `Card` contract adds a stable `card_id`, display `body`, and UTC `created_at` /
 `expires_at` timestamps derived from `ttl_s`. It is defined for the Editor and browser
-delivery stages; those stages own ranking, persistence, and publication.
+delivery stages; those stages own ranking, persistence, and publication. The Editor
+persists the complete JSON object in the `calacat/cards` Cosmos container, partitioned
+by `/match_id`. The Cosmos document `id` duplicates `card_id` for stable idempotency;
+the per-item Cosmos `ttl` duplicates `ttl_s`. Cards are append-only: the Editor uses a
+create-if-absent write and never rewrites a published card. `source` is `specialist` or
+`fallback`; fallback cards keep the original signal, evidence IDs, metrics, topic, and
+match clock. Push consumers should filter cards by `expires_at` rather than relying on
+Cosmos TTL deletion notifications, use a `match-{match_id}` Web PubSub group, and
+deduplicate deliveries by `card_id`.
+
+```json
+{
+  "id": "stable-card-uuid",
+  "card_id": "stable-card-uuid",
+  "candidate_id": "candidate-uuid",
+  "signal_id": "signal-uuid",
+  "match_id": "m-0007",
+  "headline": "A second goal changes the balance",
+  "body": "The home side has now scored twice.",
+  "metrics": { "goal": 2 },
+  "evidence_event_ids": ["evt-0042"],
+  "entity_ids": ["t-home"],
+  "topic": "goal",
+  "salience": 1.0,
+  "source": "specialist",
+  "match_clock_s": 4020,
+  "ttl_s": 180,
+  "ttl": 180,
+  "created_at": "2026-10-23T18:30:00Z",
+  "expires_at": "2026-10-23T18:33:00Z"
+}
+```

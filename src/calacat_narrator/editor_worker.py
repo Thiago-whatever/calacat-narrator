@@ -1,0 +1,326 @@
+"""Service Bus Editor worker for candidate ranking and DLQ recovery."""
+
+import asyncio
+import logging
+import os
+from collections.abc import Mapping
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+from azure.identity.aio import DefaultAzureCredential
+from azure.servicebus import ServiceBusReceivedMessage, ServiceBusSubQueue
+from azure.servicebus.aio import (
+    AutoLockRenewer,
+    ServiceBusClient,
+    ServiceBusReceiver,
+)
+from pydantic import ValidationError
+
+from .agent_runtime import Candidate, Card
+from .cosmos import get_cards_container, persist_card
+from .editor import Editor, EditorConfig, fallback_candidate_card, fallback_card
+from .signals import Signal
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EditorWorkerSettings:
+    servicebus_namespace: str
+    candidates_topic: str
+    candidates_subscription: str
+    signals_topic: str
+    deadletter_subscriptions: tuple[str, ...]
+    focus: str | None = None
+
+    @classmethod
+    def from_environment(
+        cls,
+        environ: Mapping[str, str] | None = None,
+    ) -> "EditorWorkerSettings":
+        values = os.environ if environ is None else environ
+
+        def required(name: str) -> str:
+            value = values.get(name, "").strip()
+            if not value:
+                raise RuntimeError(f"{name} setting is required")
+            return value
+
+        deadletter_subscriptions = tuple(
+            item.strip()
+            for item in required("EDITOR_DEADLETTER_SUBSCRIPTIONS").split(",")
+            if item.strip()
+        )
+        if not deadletter_subscriptions:
+            raise RuntimeError("EDITOR_DEADLETTER_SUBSCRIPTIONS must include a subscription")
+        return cls(
+            servicebus_namespace=required("SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"),
+            candidates_topic=required("SERVICEBUS_CANDIDATES_TOPIC_NAME"),
+            candidates_subscription=required("SERVICEBUS_EDITOR_SUBSCRIPTION_NAME"),
+            signals_topic=required("SERVICEBUS_TOPIC_NAME"),
+            deadletter_subscriptions=deadletter_subscriptions,
+            focus=values.get("EDITOR_FOCUS"),
+        )
+
+
+async def process_candidate_message(
+    receiver: ServiceBusReceiver,
+    message: ServiceBusReceivedMessage,
+    editor: Editor,
+    pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
+    *,
+    now: datetime | None = None,
+) -> None:
+    try:
+        candidate = Candidate.model_validate_json(_message_body(message))
+    except (TypeError, ValueError, ValidationError):
+        logger.warning("Dead-lettering invalid candidate message %s", message.message_id)
+        await receiver.dead_letter_message(
+            message,
+            reason="InvalidCandidate",
+            error_description="The message body does not match the candidate schema.",
+        )
+        return
+
+    submission = editor.submit(candidate, now=now)
+    for candidate_id in submission.dropped_candidate_ids:
+        dropped = pending.pop(candidate_id, None)
+        editor.remove(candidate_id)
+        if dropped is not None:
+            await dropped[0].complete_message(dropped[1])
+
+    if submission.immediate_card is not None:
+        try:
+            persist_card(get_cards_container(), submission.immediate_card)
+        except Exception:
+            logger.exception("Failed to persist critical card %s", submission.immediate_card.card_id)
+            editor.remove(candidate.candidate_id)
+            await receiver.abandon_message(message)
+            return
+        editor.mark_published(candidate.candidate_id, now=now)
+        await receiver.complete_message(message)
+        return
+
+    if submission.accepted:
+        pending[candidate.candidate_id] = (receiver, message)
+    else:
+        await receiver.complete_message(message)
+
+
+async def process_deadletter_message(
+    receiver: ServiceBusReceiver,
+    message: ServiceBusReceivedMessage,
+    editor: Editor,
+    config: EditorConfig,
+    pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
+    *,
+    now: datetime | None = None,
+) -> None:
+    try:
+        signal = Signal.model_validate_json(_message_body(message))
+    except (TypeError, ValueError, ValidationError):
+        logger.error("Completing unusable dead-letter message %s", message.message_id)
+        await receiver.complete_message(message)
+        return
+
+    await _submit_fallback_card(
+        receiver,
+        message,
+        fallback_card(signal, config, now=now),
+        editor,
+        pending,
+        now=now,
+    )
+
+
+async def process_candidate_deadletter_message(
+    receiver: ServiceBusReceiver,
+    message: ServiceBusReceivedMessage,
+    editor: Editor,
+    config: EditorConfig,
+    pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
+    *,
+    now: datetime | None = None,
+) -> None:
+    try:
+        candidate = Candidate.model_validate_json(_message_body(message))
+    except (TypeError, ValueError, ValidationError):
+        logger.error("Completing unusable candidate DLQ message %s", message.message_id)
+        await receiver.complete_message(message)
+        return
+
+    await _submit_fallback_card(
+        receiver,
+        message,
+        fallback_candidate_card(candidate, config, now=now),
+        editor,
+        pending,
+        now=now,
+    )
+
+
+async def _submit_fallback_card(
+    receiver: ServiceBusReceiver,
+    message: ServiceBusReceivedMessage,
+    card: Card,
+    editor: Editor,
+    pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
+    *,
+    now: datetime | None,
+) -> None:
+    candidate = Candidate(
+        candidate_id=card.candidate_id,
+        signal_id=card.signal_id,
+        match_id=card.match_id,
+        headline=card.headline,
+        why_it_matters=card.body,
+        metrics=card.metrics,
+        evidence_event_ids=card.evidence_event_ids,
+        entity_ids=card.entity_ids,
+        topic=card.topic,
+        self_salience=card.salience,
+        ttl_s=card.ttl_s,
+        match_clock_s=card.match_clock_s,
+    )
+    submission = editor.submit(candidate, now=now, source="fallback")
+    for candidate_id in submission.dropped_candidate_ids:
+        dropped = pending.pop(candidate_id, None)
+        editor.remove(candidate_id)
+        if dropped is not None:
+            await dropped[0].complete_message(dropped[1])
+    if submission.immediate_card is not None:
+        try:
+            persist_card(get_cards_container(), submission.immediate_card)
+        except Exception:
+            logger.exception("Failed to persist fallback card %s", submission.immediate_card.card_id)
+            await receiver.abandon_message(message)
+            return
+        editor.mark_published(candidate.candidate_id, now=now)
+        await receiver.complete_message(message)
+    elif submission.accepted:
+        pending[candidate.candidate_id] = (receiver, message)
+    else:
+        await receiver.complete_message(message)
+
+
+async def consume_editor(
+    receivers: list[tuple[ServiceBusReceiver, str]],
+    editor: Editor,
+    config: EditorConfig,
+) -> None:
+    """Keep deferred candidates locked until they are stored or intentionally dropped."""
+    pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]] = {}
+    async with AutoLockRenewer(max_lock_renewal_duration=300) as renewer:
+        while True:
+            batches = await asyncio.gather(
+                *(
+                    receiver.receive_messages(max_message_count=1, max_wait_time=1)
+                    for receiver, _ in receivers
+                )
+            )
+            current = datetime.now(UTC)
+            for (receiver, route), messages in zip(receivers, batches, strict=True):
+                for message in messages:
+                    renewer.register(receiver, message)
+                    if route == "signal_dlq":
+                        await process_deadletter_message(
+                            receiver, message, editor, config, pending, now=current
+                        )
+                    elif route == "candidate_dlq":
+                        await process_candidate_deadletter_message(
+                            receiver, message, editor, config, pending, now=current
+                        )
+                    else:
+                        await process_candidate_message(
+                            receiver, message, editor, pending, now=current
+                        )
+
+            for candidate_id in editor.expire_queue(now=current):
+                expired = pending.pop(candidate_id, None)
+                if expired is not None:
+                    await expired[0].complete_message(expired[1])
+
+            card = editor.peek_due(now=current)
+            if card is None:
+                continue
+            source = pending.get(card.candidate_id)
+            if source is None:
+                editor.remove(card.candidate_id)
+                continue
+            try:
+                persist_card(get_cards_container(), card)
+            except Exception:
+                logger.exception("Failed to persist Editor card %s", card.card_id)
+                editor.remove(card.candidate_id)
+                pending.pop(card.candidate_id, None)
+                await source[0].abandon_message(source[1])
+                continue
+            editor.mark_published(card.candidate_id, now=current)
+            pending.pop(card.candidate_id, None)
+            await source[0].complete_message(source[1])
+
+
+async def run_editor(settings: EditorWorkerSettings) -> None:
+    config = EditorConfig.load()
+    editor = Editor(config, focus=settings.focus)
+    async with DefaultAzureCredential() as credential, ServiceBusClient(
+        fully_qualified_namespace=settings.servicebus_namespace,
+        credential=credential,
+    ) as client, AsyncExitStack() as stack:
+        receivers: list[tuple[ServiceBusReceiver, str]] = []
+        candidate_receiver = client.get_subscription_receiver(
+            topic_name=settings.candidates_topic,
+            subscription_name=settings.candidates_subscription,
+            max_wait_time=1,
+        )
+        receivers.append(
+            (
+                await stack.enter_async_context(candidate_receiver),
+                "candidate",
+            )
+        )
+        candidate_dlq_receiver = client.get_subscription_receiver(
+            topic_name=settings.candidates_topic,
+            subscription_name=settings.candidates_subscription,
+            sub_queue=ServiceBusSubQueue.DEAD_LETTER,
+            max_wait_time=1,
+        )
+        receivers.append(
+            (
+                await stack.enter_async_context(candidate_dlq_receiver),
+                "candidate_dlq",
+            )
+        )
+        for subscription in settings.deadletter_subscriptions:
+            deadletter_receiver = client.get_subscription_receiver(
+                topic_name=settings.signals_topic,
+                subscription_name=subscription,
+                sub_queue=ServiceBusSubQueue.DEAD_LETTER,
+                max_wait_time=1,
+            )
+            receivers.append(
+                (
+                    await stack.enter_async_context(deadletter_receiver),
+                    "signal_dlq",
+                )
+            )
+        await consume_editor(receivers, editor, config)
+
+
+def _message_body(message: ServiceBusReceivedMessage) -> bytes:
+    body = message.body
+    if isinstance(body, (bytes, bytearray, memoryview)):
+        return bytes(body)
+    if isinstance(body, str):
+        return body.encode("utf-8")
+    return b"".join(bytes(part) for part in body)
+
+
+def main() -> None:
+    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+    asyncio.run(run_editor(EditorWorkerSettings.from_environment()))
+
+
+if __name__ == "__main__":
+    main()

@@ -5,11 +5,13 @@ param containerAppsIdentityPrincipalId string
 param storageAccountName string
 param cosmosAccountName string
 param cosmosDatabaseName string
+param cosmosCardsContainerName string
 param eventHubNamespaceName string
 param serviceBusNamespaceName string
 param serviceBusTopicName string
 param serviceBusCandidateTopicName string
 param serviceBusSignalSubscriptionNames array
+param serviceBusEditorSignalSubscriptionNames array
 param webPubSubName string
 param containerRegistryName string
 
@@ -23,6 +25,10 @@ var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9147-0e5a2a2247e0'
 var webPubSubServiceOwnerRoleId = '12cf5a90-567b-43ae-8102-96cf46c7d9b4'
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var cosmosBuiltInDataContributorRoleId = '00000000-0000-0000-0000-000000000002'
+var workloadSignalSubscriptionNames = union(
+  serviceBusSignalSubscriptionNames,
+  serviceBusEditorSignalSubscriptionNames
+)
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' existing = {
   name: storageAccountName
@@ -30,6 +36,16 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' existing 
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-04-15' existing = {
   name: cosmosAccountName
+}
+
+resource cosmosDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2025-04-15' existing = {
+  parent: cosmosAccount
+  name: cosmosDatabaseName
+}
+
+resource cosmosCardsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-04-15' existing = {
+  parent: cosmosDatabase
+  name: cosmosCardsContainerName
 }
 
 resource eventHubNamespace 'Microsoft.EventHub/namespaces@2024-01-01' existing = {
@@ -50,8 +66,8 @@ resource serviceBusTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' exi
   name: serviceBusTopicName
 }
 
-resource agentSignalSubscriptions 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' existing = [
-  for subscriptionName in serviceBusSignalSubscriptionNames: {
+resource workloadSignalSubscriptions 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' existing = [
+  for subscriptionName in workloadSignalSubscriptionNames: {
     parent: serviceBusTopic
     name: subscriptionName
   }
@@ -60,6 +76,11 @@ resource agentSignalSubscriptions 'Microsoft.ServiceBus/namespaces/topics/subscr
 resource candidatesTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' existing = {
   parent: serviceBusNamespace
   name: serviceBusCandidateTopicName
+}
+
+resource editorCandidateSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' existing = {
+  parent: candidatesTopic
+  name: 'editor'
 }
 
 resource webPubSub 'Microsoft.SignalRService/WebPubSub@2024-03-01' existing = {
@@ -130,10 +151,10 @@ resource functionServiceBusSenderRole 'Microsoft.Authorization/roleAssignments@2
   }
 }
 
-resource agentSignalReceiverRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for index in range(0, length(serviceBusSignalSubscriptionNames)): {
-    name: guid(agentSignalSubscriptions[index].id, containerAppsIdentityPrincipalId, serviceBusDataReceiverRoleId)
-    scope: agentSignalSubscriptions[index]
+resource workloadSignalReceiverRoles 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for index in range(0, length(workloadSignalSubscriptionNames)): {
+    name: guid(workloadSignalSubscriptions[index].id, containerAppsIdentityPrincipalId, serviceBusDataReceiverRoleId)
+    scope: workloadSignalSubscriptions[index]
     properties: {
       roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataReceiverRoleId)
       principalId: containerAppsIdentityPrincipalId
@@ -147,6 +168,16 @@ resource agentCandidateSenderRole 'Microsoft.Authorization/roleAssignments@2022-
   scope: candidatesTopic
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataSenderRoleId)
+    principalId: containerAppsIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource editorCandidateReceiverRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(editorCandidateSubscription.id, containerAppsIdentityPrincipalId, serviceBusDataReceiverRoleId)
+  scope: editorCandidateSubscription
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', serviceBusDataReceiverRoleId)
     principalId: containerAppsIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
@@ -179,5 +210,15 @@ resource functionCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAs
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
     principalId: functionPrincipalId
     scope: '/dbs/${cosmosDatabaseName}'
+  }
+}
+
+resource editorCardsCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-04-15' = {
+  parent: cosmosAccount
+  name: guid(cosmosAccount.id, cosmosCardsContainer.id, containerAppsIdentityPrincipalId, cosmosBuiltInDataContributorRoleId)
+  properties: {
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
+    principalId: containerAppsIdentityPrincipalId
+    scope: '/dbs/${cosmosDatabaseName}/colls/${cosmosCardsContainerName}'
   }
 }

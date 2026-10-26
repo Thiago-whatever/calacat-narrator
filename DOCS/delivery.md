@@ -24,6 +24,7 @@ Work through **issues → PRs**, not straight to `main`. The history becomes evi
 - `azure.yaml` selects the Bicep entry point in `infra/main.bicep`; `infra/main.parameters.json` maps the azd environment and location.
 - Provision MVP resources in East US. The template references the existing Foundry account/project in `rg-calacat`; it does not create another Foundry resource.
 - Cosmos DB includes the serverless `calacat/match-state` database/container used by the interpreter.
+- Cosmos DB also includes `calacat/cards`, partitioned by `match_id`, with per-item TTL. The Editor Container App writes append-only card documents using the shared workload identity; the cards contract and push seam are documented in `DOCS/data-model.md`.
 - Runtime access uses managed identities and scoped data-plane roles. Local/shared-key authentication is disabled where supported; public endpoints remain enabled for the MVP and `.azure/` environment state is ignored by Git (ADR-021).
 - The Container Apps user-assigned identity receives Cognitive Services OpenAI User on the existing Foundry account for model calls (ADR-024).
 - The Goal & Shot and Build-up & Passing specialists run as separate Docker-built Container Apps, each consuming its filtered Service Bus signal subscription and publishing candidates. They scale to zero and share the workload managed identity for Foundry, messaging, and ACR pull (ADR-025). Install the Foundry provider with the project dependencies using `python -m pip install --pre -e .`.
@@ -33,7 +34,7 @@ Work through **issues → PRs**, not straight to `main`. The history becomes evi
 | Component | Service | Scale |
 |---|---|---|
 | Web UI | Static Web Apps (Free) | — |
-| Simulator, agents, MCP server | Container Apps | scale to zero when idle |
+| Simulator, agents, Editor, MCP server | Container Apps | Editor stays at one replica to monitor signal DLQs; other workloads scale to zero when idle |
 | Ingest, Interpreter | Functions (Linux Consumption, Y1) | event-driven |
 | Stream | Event Hubs Standard, 1 TU | Capture needs Standard |
 | Fan-out | Service Bus Standard | topics need Standard |
