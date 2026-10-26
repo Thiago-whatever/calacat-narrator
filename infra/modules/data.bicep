@@ -1,4 +1,6 @@
 param location string
+@description('Cosmos DB region; can differ from location when a region lacks Cosmos capacity.')
+param cosmosLocation string = location
 param storageAccountName string
 param cosmosAccountName string
 param tags object
@@ -24,7 +26,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2025-01-01' = {
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-04-15' = {
   name: cosmosAccountName
-  location: location
+  location: cosmosLocation
   kind: 'GlobalDocumentDB'
   properties: {
     databaseAccountOfferType: 'Standard'
@@ -41,7 +43,7 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2025-04-15' = {
     }
     locations: [
       {
-        locationName: location
+        locationName: cosmosLocation
         failoverPriority: 0
         isZoneRedundant: false
       }

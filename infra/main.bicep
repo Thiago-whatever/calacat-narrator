@@ -8,6 +8,9 @@ param environmentName string = 'dev'
 @description('Azure region for the MVP resources.')
 param location string = 'eastus'
 
+@description('Cosmos DB region. East US had no Cosmos capacity for new accounts (Oct 2026).')
+param cosmosLocation string = 'eastus2'
+
 @description('Resource group containing the existing Microsoft Foundry account.')
 param foundryResourceGroupName string = 'rg-calacat'
 
@@ -46,6 +49,7 @@ module data 'modules/data.bicep' = {
   name: 'data-${nameSuffix}'
   params: {
     location: location
+    cosmosLocation: cosmosLocation
     storageAccountName: take('st${baseName}', 24)
     cosmosAccountName: 'cosmos-${baseName}'
     tags: tags
