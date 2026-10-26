@@ -144,7 +144,17 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 
 **Revisit when:** Per-match throughput or Cosmos conflict rates become material; then partition aggregates by match plus entity or use an append-only event ledger.
 
-## ADR-023 — Possession-scoped pass streaks
+## ADR-023 — Publish gated signals before committing match state
+
+**Decision:** Evaluate signal gates from the proposed state and publish to Service Bus before committing the corresponding Cosmos update; use deterministic signal IDs with the topic's duplicate detection.
+
+**Why:** A failed publish leaves the Event Hubs event uncheckpointed and retryable, avoiding a committed aggregate with a silently lost signal.
+
+**How it could be wrong:** Service Bus may accept a signal before a later Cosmos conflict or failure; duplicate detection limits but does not eliminate duplicates beyond its configured history window.
+
+**Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.
+
+## ADR-029 — Possession-scoped pass streaks
 - **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
 - **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.
 - **How it could be wrong:** Some event types such as a foul, shot, or goalkeeper action can have ambiguous possession outcomes in real football.

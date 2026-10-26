@@ -1,5 +1,7 @@
 """Deterministic event reduction and idempotent Cosmos DB persistence."""
 
+from collections.abc import Callable
+
 from azure.core import MatchConditions
 from azure.cosmos import ContainerProxy
 from azure.cosmos.exceptions import CosmosHttpResponseError
@@ -43,6 +45,15 @@ class EntityAggregate(BaseModel):
     set_pieces: int = 0
     goalkeeper_actions: int = 0
     substitutions: int = 0
+    penalties: int = 0
+    recent_shot_event_ids: list[str] = Field(default_factory=list)
+
+
+class SignalGateState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    last_emitted_clock_s: int | None = None
+    armed_milestones: list[int] = Field(default_factory=list)
 
 
 class MatchState(BaseModel):
@@ -61,6 +72,7 @@ class MatchState(BaseModel):
     score: dict[str, int] = Field(default_factory=dict)
     team_stats: dict[str, EntityAggregate] = Field(default_factory=dict)
     player_stats: dict[str, EntityAggregate] = Field(default_factory=dict)
+    signal_gate_state: dict[str, SignalGateState] = Field(default_factory=dict)
     updated_at: str
 
 
@@ -127,6 +139,8 @@ def apply_event(state: MatchState | None, event: MatchEvent) -> tuple[MatchState
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.shots += 1
+                aggregate.recent_shot_event_ids.append(event.event_id)
+                aggregate.recent_shot_event_ids = aggregate.recent_shot_event_ids[-20:]
                 if payload.outcome in {"goal", "saved"}:
                     aggregate.shots_on_target += 1
                 if payload.outcome == "goal":
@@ -180,6 +194,8 @@ def apply_event(state: MatchState | None, event: MatchEvent) -> tuple[MatchState
         for aggregate in (team_stats, player_stats):
             if aggregate is not None:
                 aggregate.set_pieces += 1
+                if payload.kind == "penalty":
+                    aggregate.penalties += 1
     elif isinstance(payload, GoalkeeperActionPayload):
         if event.team_id is not None:
             _set_possession(state, event.team_id)
@@ -225,7 +241,11 @@ def _get_aggregate(
     return aggregates[entity_id]
 
 
-def update_match_state(container: ContainerProxy, event: MatchEvent) -> bool:
+def update_match_state(
+    container: ContainerProxy,
+    event: MatchEvent,
+    before_persist: Callable[[MatchState, MatchEvent], None] | None = None,
+) -> bool:
     """Persist a match update with ETag concurrency control and sequence dedupe."""
     for _ in range(MAX_COSMOS_WRITE_ATTEMPTS):
         try:
@@ -248,6 +268,8 @@ def update_match_state(container: ContainerProxy, event: MatchEvent) -> bool:
         updated_state, applied = apply_event(state, event)
         if not applied:
             return False
+        if before_persist is not None:
+            before_persist(updated_state, event)
         body = updated_state.model_dump(mode="json")
 
         try:

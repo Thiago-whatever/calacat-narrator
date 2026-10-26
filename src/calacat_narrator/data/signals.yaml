@@ -1,0 +1,61 @@
+version: 1
+rules:
+  - kind: goal
+    entity: team
+    metric: goals
+    sample_metric: event_count
+    critical: true
+    event_type: shot
+    event_field: outcome
+    event_value: goal
+    min_sample: 0
+    min_clock_s: 0
+    milestones: []
+    cooldown_s: 0
+    hysteresis: 0
+  - kind: red_card
+    entity: team
+    metric: red_cards
+    sample_metric: event_count
+    critical: true
+    event_type: card
+    event_field: card
+    event_value: red
+    min_sample: 0
+    min_clock_s: 0
+    milestones: []
+    cooldown_s: 0
+    hysteresis: 0
+  - kind: penalty
+    entity: team
+    metric: penalties
+    sample_metric: event_count
+    critical: true
+    event_type: set_piece
+    event_field: kind
+    event_value: penalty
+    min_sample: 0
+    min_clock_s: 0
+    milestones: []
+    cooldown_s: 0
+    hysteresis: 0
+  - kind: pass_streak
+    entity: team
+    metric: current_pass_streak
+    sample_metric: passes_attempted
+    critical: false
+    min_sample: 25
+    min_clock_s: 600
+    milestones: [8]
+    cooldown_s: 600
+    hysteresis: 2
+  - kind: shot_volume
+    entity: team
+    metric: shots
+    sample_metric: event_count
+    critical: false
+    min_sample: 30
+    min_clock_s: 600
+    milestones: [5, 10]
+    cooldown_s: 600
+    hysteresis: 0
