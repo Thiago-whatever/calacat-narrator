@@ -77,15 +77,25 @@ module observability 'modules/observability.bicep' = {
   }
 }
 
+module registry 'modules/registry.bicep' = {
+  name: 'registry-${nameSuffix}'
+  params: {
+    location: location
+    containerRegistryName: 'cr${baseName}'
+    containerAppsIdentityName: 'id-${baseName}'
+    tags: tags
+  }
+}
+
 module compute 'modules/compute.bicep' = {
   name: 'compute-${nameSuffix}'
   params: {
     location: location
     functionAppName: 'fn-${baseName}'
     functionPlanName: 'plan-${baseName}'
-    containerRegistryName: 'cr${baseName}'
+    containerRegistryName: registry.outputs.containerRegistryName
     containerAppsEnvironmentName: 'cae-${baseName}'
-    containerAppsIdentityName: 'id-${baseName}'
+    containerAppsIdentityName: registry.outputs.containerAppsIdentityName
     storageAccountName: data.outputs.storageAccountName
     deploymentStorageContainerUrl: data.outputs.deploymentStorageContainerUrl
     containerImages: containerImages
@@ -126,7 +136,6 @@ module roles 'modules/roles.bicep' = {
     serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing']
     serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'tactical', 'player-milestones']
     webPubSubName: observability.outputs.webPubSubName
-    containerRegistryName: compute.outputs.containerRegistryName
   }
 }
 
@@ -142,7 +151,8 @@ module foundryRole 'modules/foundry-role.bicep' = {
 output functionAppName string = compute.outputs.functionAppName
 output containerAppsEnvironmentId string = compute.outputs.containerAppsEnvironmentId
 output containerAppsIdentityResourceId string = compute.outputs.containerAppsIdentityResourceId
-output containerRegistryLoginServer string = compute.outputs.containerRegistryLoginServer
+// azd reads this exact name to find the registry for remote builds.
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = compute.outputs.containerRegistryLoginServer
 output storageAccountName string = data.outputs.storageAccountName
 output cosmosAccountName string = data.outputs.cosmosAccountName
 output cosmosEndpoint string = data.outputs.cosmosEndpoint

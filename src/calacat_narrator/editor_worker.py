@@ -21,6 +21,7 @@ from .agent_runtime import Candidate, Card
 from .cosmos import get_cards_container, persist_card
 from .editor import Editor, EditorConfig, fallback_candidate_card, fallback_card
 from .signals import Signal
+from .webpubsub import publish_cards
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ async def process_candidate_message(
 
     if submission.immediate_card is not None:
         try:
-            persist_card(get_cards_container(), submission.immediate_card)
+            _store_card(submission.immediate_card)
         except Exception:
             logger.exception("Failed to persist critical card %s", submission.immediate_card.card_id)
             editor.remove(candidate.candidate_id)
@@ -191,7 +192,7 @@ async def _submit_fallback_card(
             await dropped[0].complete_message(dropped[1])
     if submission.immediate_card is not None:
         try:
-            persist_card(get_cards_container(), submission.immediate_card)
+            _store_card(submission.immediate_card)
         except Exception:
             logger.exception("Failed to persist fallback card %s", submission.immediate_card.card_id)
             await receiver.abandon_message(message)
@@ -249,7 +250,7 @@ async def consume_editor(
                 editor.remove(card.candidate_id)
                 continue
             try:
-                persist_card(get_cards_container(), card)
+                _store_card(card)
             except Exception:
                 logger.exception("Failed to persist Editor card %s", card.card_id)
                 editor.remove(card.candidate_id)
@@ -306,6 +307,15 @@ async def run_editor(settings: EditorWorkerSettings) -> None:
                 )
             )
         await consume_editor(receivers, editor, config)
+
+
+def _store_card(card: Card) -> None:
+    """Persist, then push to browsers. A failed push only logs: the card is already stored."""
+    persist_card(get_cards_container(), card)
+    try:
+        publish_cards([card])
+    except Exception:
+        logger.exception("Stored card %s but failed to push it", card.card_id)
 
 
 def _message_body(message: ServiceBusReceivedMessage) -> bytes:

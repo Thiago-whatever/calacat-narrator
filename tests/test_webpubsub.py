@@ -69,25 +69,6 @@ def negotiate_request(match_id: str | None) -> func.HttpRequest:
     return func.HttpRequest(method="GET", url="/negotiate", body=b"", params=params)
 
 
-def test_live_cards_strips_cosmos_fields_and_drops_expired_or_invalid() -> None:
-    live = card("candidate-live")
-    documents = [cosmos_document(live), {"id": "broken", "headline": "missing fields"}]
-
-    assert webpubsub.live_cards(documents, now=CREATED_AT) == [live]
-    assert webpubsub.live_cards(documents, now=live.expires_at) == []
-
-
-def test_push_cards_sends_live_cards_to_their_match_group(monkeypatch) -> None:
-    client = FakeClient()
-    monkeypatch.setattr(webpubsub, "_client", lambda: client)
-    expired = card("candidate-old")
-    live = card("candidate-new", match_id="m-0008", created_at=datetime.now(UTC))
-
-    function_app.push_cards([cosmos_document(expired), cosmos_document(live)])
-
-    assert client.sent == [("match-m-0008", live.model_dump(mode="json"), "application/json")]
-
-
 def test_publish_cards_sends_the_rest_then_raises_when_one_fails(monkeypatch) -> None:
     client = FakeClient(fail_groups=("match-m-0007",))
     monkeypatch.setattr(webpubsub, "_client", lambda: client)

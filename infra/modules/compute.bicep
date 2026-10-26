@@ -29,25 +29,13 @@ param tags object
 
 // The registry is empty on first provision; later provisions keep what azd deployed.
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
+// Created with AcrPull in registry.bicep; main.bicep passes its outputs, so compute runs after it.
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: containerRegistryName
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: false
-    anonymousPullEnabled: false
-    publicNetworkAccess: 'Enabled'
-  }
-  tags: tags
 }
 
-resource containerAppsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource containerAppsIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: containerAppsIdentityName
-  location: location
-  tags: tags
 }
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01' = {
@@ -230,6 +218,14 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'COSMOS_CARDS_CONTAINER'
               value: cosmosCardsContainerName
+            }
+            {
+              name: 'WEBPUBSUB_HOST_NAME'
+              value: webPubSubHostName
+            }
+            {
+              name: 'WEBPUBSUB_HUB'
+              value: 'cards'
             }
           ]
         }

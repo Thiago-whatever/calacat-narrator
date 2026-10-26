@@ -262,3 +262,33 @@ def test_editor_worker_settings_require_candidate_and_dlq_routes() -> None:
                 "SERVICEBUS_TOPIC_NAME": "signals",
             }
         )
+
+
+def test_stored_card_is_pushed_and_a_failed_push_still_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = FakeContainer()
+    monkeypatch.setattr(editor_worker, "get_cards_container", lambda: container)
+    pushed: list[str] = []
+
+    def failing_push(cards: list) -> None:
+        pushed.extend(card.card_id for card in cards)
+        raise RuntimeError("Web PubSub down")
+
+    monkeypatch.setattr(editor_worker, "publish_cards", failing_push)
+    receiver = FakeReceiver()
+    message = FakeMessage(
+        candidate_json()
+        .replace(b"shot_volume", b"goal")
+        .replace(b"candidate-1", b"candidate-goal")
+    )
+
+    asyncio.run(
+        editor_worker.process_candidate_message(
+            receiver, message, Editor(EditorConfig.load()), {}, now=datetime(2026, 10, 25, tzinfo=UTC)
+        )
+    )
+
+    assert len(container.documents) == 1
+    assert pushed == [container.documents[0]["id"]]
+    assert receiver.completed == [message]

@@ -13,7 +13,6 @@ param serviceBusCandidateTopicName string
 param serviceBusSignalSubscriptionNames array
 param serviceBusEditorSignalSubscriptionNames array
 param webPubSubName string
-param containerRegistryName string
 
 var storageBlobDataOwnerRoleId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 var storageQueueDataContributorRoleId = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
@@ -21,9 +20,8 @@ var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 var eventHubsDataSenderRoleId = '2b629674-e913-4c01-ae53-ef4638d8f975'
 var eventHubsDataReceiverRoleId = 'a638d3c7-ab3a-418d-83e6-5f17a39d4fde'
 var serviceBusDataSenderRoleId = '69a216fc-b8fb-44d8-bc22-1f3c2cd27a39'
-var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9147-0e5a2a2247e0'
+var serviceBusDataReceiverRoleId = '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
 var webPubSubServiceOwnerRoleId = '12cf5a90-567b-43ae-8102-96cf46c7d9b4'
-var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var cosmosBuiltInDataContributorRoleId = '00000000-0000-0000-0000-000000000002'
 var workloadSignalSubscriptionNames = union(
   serviceBusSignalSubscriptionNames,
@@ -85,10 +83,6 @@ resource editorCandidateSubscription 'Microsoft.ServiceBus/namespaces/topics/sub
 
 resource webPubSub 'Microsoft.SignalRService/WebPubSub@2024-03-01' existing = {
   name: webPubSubName
-}
-
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
-  name: containerRegistryName
 }
 
 resource functionStorageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -193,11 +187,12 @@ resource functionWebPubSubRole 'Microsoft.Authorization/roleAssignments@2022-04-
   }
 }
 
-resource containerAppsAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, containerAppsIdentityPrincipalId, acrPullRoleId)
-  scope: containerRegistry
+// The Editor pushes each stored card to its match group.
+resource editorWebPubSubRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(webPubSub.id, containerAppsIdentityPrincipalId, webPubSubServiceOwnerRoleId)
+  scope: webPubSub
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', webPubSubServiceOwnerRoleId)
     principalId: containerAppsIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
@@ -209,7 +204,7 @@ resource functionCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAs
   properties: {
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
     principalId: functionPrincipalId
-    scope: '/dbs/${cosmosDatabaseName}'
+    scope: '${cosmosAccount.id}/dbs/${cosmosDatabaseName}'
   }
 }
 
@@ -219,6 +214,6 @@ resource editorCardsCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRol
   properties: {
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
     principalId: containerAppsIdentityPrincipalId
-    scope: '/dbs/${cosmosDatabaseName}/colls/${cosmosCardsContainerName}'
+    scope: '${cosmosAccount.id}/dbs/${cosmosDatabaseName}/colls/${cosmosCardsContainerName}'
   }
 }

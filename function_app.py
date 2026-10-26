@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import List  # noqa: UP035 - see interpret()
 
 import azure.functions as func
 from azure.core.exceptions import AzureError
@@ -17,9 +18,7 @@ from calacat_narrator.servicebus import publish_signals
 from calacat_narrator.signals import evaluate_signals, load_signal_rules
 from calacat_narrator.webpubsub import (
     client_access_url,
-    live_cards,
     match_group,
-    publish_cards,
     validate_match_id,
 )
 
@@ -72,7 +71,7 @@ def ingest(req: func.HttpRequest) -> func.HttpResponse:
     connection="EVENTHUB_CONNECTION",
     cardinality="many",
 )
-def interpret(events: list[func.EventHubEvent]) -> None:
+def interpret(events: List[func.EventHubEvent]) -> None:  # noqa: UP006 - Functions worker rejects builtin list[...]
     """Update durable match aggregates from an ordered Event Hubs batch."""
     container = get_match_container()
     for received_event in events:
@@ -116,21 +115,3 @@ def negotiate(req: func.HttpRequest) -> func.HttpResponse:
         headers={"Cache-Control": "no-store"},
     )
 
-
-@app.retry(
-    strategy="exponential_backoff",
-    max_retry_count="5",
-    minimum_interval="00:00:02",
-    maximum_interval="00:00:30",
-)
-@app.cosmos_db_trigger(
-    arg_name="documents",
-    connection="COSMOS_CONNECTION",
-    database_name="%COSMOS_DATABASE%",
-    container_name="%COSMOS_CARDS_CONTAINER%",
-    lease_container_name="leases",
-    create_lease_container_if_not_exists=False,
-)
-def push_cards(documents: func.DocumentList) -> None:
-    """Fan newly persisted, unexpired cards out to their match's Web PubSub group."""
-    publish_cards(live_cards(documents))

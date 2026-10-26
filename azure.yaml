@@ -20,6 +20,7 @@ services:
     project: .
     language: python
     host: function
+    remoteBuild: true
   agent-runtime-goal-shot:
     project: .
     language: docker
