@@ -195,7 +195,7 @@ def _evidence_ids(
     event_id: str,
 ) -> list[str]:
     if metric == "current_pass_streak":
-        return aggregate.current_pass_event_ids[-milestone:]
+        return aggregate.current_pass_streak_event_ids[-milestone:]
     if metric == "shots":
         return aggregate.recent_shot_event_ids[-milestone:]
     return [event_id]

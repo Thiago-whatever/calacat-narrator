@@ -153,3 +153,9 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 **How it could be wrong:** Service Bus may accept a signal before a later Cosmos conflict or failure; duplicate detection limits but does not eliminate duplicates beyond its configured history window.
 
 **Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.
+
+## ADR-029 — Possession-scoped pass streaks
+- **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
+- **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.
+- **How it could be wrong:** Some event types such as a foul, shot, or goalkeeper action can have ambiguous possession outcomes in real football.
+- **Revisit when:** Event producers provide more explicit possession outcomes or replay validation shows the interruption policy is too broad or too narrow.
