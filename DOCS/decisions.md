@@ -163,3 +163,9 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 **How it could be wrong:** If the agent service uses a different managed identity, the deployment will need to attach and authorize that identity instead.
 
 **Revisit when:** The Container App identity or Foundry account changes; verify the deployed agent uses this exact identity before rollout.
+
+## ADR-029 — Possession-scoped pass streaks
+- **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
+- **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.
+- **How it could be wrong:** Some event types such as a foul, shot, or goalkeeper action can have ambiguous possession outcomes in real football.
+- **Revisit when:** Event producers provide more explicit possession outcomes or replay validation shows the interruption policy is too broad or too narrow.

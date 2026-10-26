@@ -77,7 +77,7 @@ def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:
     stats = EntityAggregate(
         passes_attempted=25,
         current_pass_streak=8,
-        current_pass_event_ids=[f"pass-{index}" for index in range(8)],
+        current_pass_streak_event_ids=[f"pass-{index}" for index in range(8)],
     )
     state = MatchState(
         id="m-0007",
@@ -128,7 +128,7 @@ def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:
     assert evaluate_signals(state, cooldown_event, (rule,)) == []
 
     stats.current_pass_streak = 8
-    stats.current_pass_event_ids = [f"pass-again-{index}" for index in range(8)]
+    stats.current_pass_streak_event_ids = [f"pass-again-{index}" for index in range(8)]
     state.match_clock_s = 1200
     second_event = make_event(
         3,
