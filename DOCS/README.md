@@ -13,6 +13,8 @@ Built on Azure (Event Hubs, Functions, Service Bus, Cosmos DB, Container Apps, W
 | [accessibility.md](accessibility.md) | Language, visual, cognitive accessibility, empowerment |
 | [roadmap.md](roadmap.md) | MVP vs stretch vs cut, day plan, submission checklist |
 | [delivery.md](delivery.md) | Copilot workflow, CI/CD, hosting, judge access, cost, security |
+| [progress.md](progress.md) | What is done, what is missing, setup commands |
+| [backlog.md](backlog.md) | All issues by priority (P0/P1/P2) and type (Azure/Code/IaC) |
 
 ## Hackathon pipeline → our implementation
 | Required stage (Rules 4.1(i)) | Where it lives |
