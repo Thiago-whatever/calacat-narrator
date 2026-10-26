@@ -2,7 +2,7 @@ import { Box, Button, Typography } from '@mui/material'
 import { styled } from '@mui/material/styles'
 import type { Strings } from '../../i18n'
 import { SIZES } from '../../state'
-import { blinking } from '../../theme/theme'
+import { blinking, srOnly } from '../../theme/theme'
 import { drain } from '../../theme/motion'
 import { BroadcastIcon, StopIcon, UndoIcon } from '../ui/icons'
 import { KeyHint } from '../ui/primitives'
@@ -17,6 +17,14 @@ const Bar = styled('div', { shouldForwardProp: (p) => p !== 'mode' })<{ mode: Ba
     padding: '10px 10px 10px 16px', borderRadius: theme.custom.radii.card,
     background: mode === 'pending' ? c.liveSoft : c.surface,
     border: `1.5px solid ${mode === 'pending' || mode === 'air' ? c.live : c.line}`,
+    // On 1280–1366px laptops the bar is ~800px wide: drop the key hints and the Size caption
+    // (still announced) and tighten the big buttons, so status and actions stay on one row.
+    containerType: 'inline-size',
+    '@container (max-width: 999.98px)': {
+      '& kbd': { display: 'none' },
+      '& .segmented-label': srOnly,
+      '& .MuiButton-sizeXl': { minWidth: 0, paddingInline: '1em' },
+    },
   }
 })
 
@@ -67,7 +75,7 @@ export function ControlBar(p: Props) {
   const pending = p.mode === 'pending'
   return (
     <Bar mode={p.mode} role="region" aria-label={t.control}>
-      <Box sx={(theme) => ({ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 220px', minWidth: 0, minHeight: theme.custom.sizes.targetLarge })}>
+      <Box sx={(theme) => ({ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 120px', minWidth: 0, minHeight: theme.custom.sizes.targetLarge })}>
         {pending ? <Countdown aria-hidden>{p.countdown}</Countdown> : <Lamp mode={p.mode} aria-hidden />}
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontWeight: 700, fontSize: '1.02em' }}>{p.title}</Typography>

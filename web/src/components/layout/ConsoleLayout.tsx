@@ -15,18 +15,31 @@ export const ConsoleRoot = styled('div', { shouldForwardProp: (p) => p !== 'drag
   [theme.custom.media.stacked]: { height: 'auto', minHeight: '100dvh', overflow: 'visible' },
 }))
 
-/** Monitor column, capped by viewport height so monitor and control bar always fit, then the feed. */
-export const ConsoleMain = styled('main')(({ theme }) => ({
-  flex: 1,
-  minHeight: 0,
-  display: 'grid',
-  gridTemplateColumns: `minmax(0, calc((100dvh - ${theme.custom.chrome}px) * 16 / 9)) minmax(360px, 1fr)`,
-  gap: 20,
-  padding: '16px 24px',
-  alignItems: 'start',
-  [theme.custom.media.stacked]: { gridTemplateColumns: 'minmax(0, 1fr)' },
-  [theme.custom.media.phone]: { padding: '12px 16px' },
-}))
+const FEED_MIN = 360
+const FEED_MAX = 640
+const GAP = 20
+
+/**
+ * Monitor column, capped by viewport height so monitor and control bar always fit, then the feed.
+ * The monitor's minimum is "everything but the feed's minimum", so it wins any contest for width;
+ * the feed only grows (to 640px) into what the monitor can't use, and beyond that the spare
+ * width on ultrawide screens becomes side margins.
+ */
+export const ConsoleMain = styled('main')(({ theme }) => {
+  const monitorMax = `calc((100dvh - ${theme.custom.chrome}px) * 16 / 9)`
+  return {
+    flex: 1,
+    minHeight: 0,
+    display: 'grid',
+    gridTemplateColumns: `minmax(min(${monitorMax}, 100% - ${FEED_MIN + GAP}px), ${monitorMax}) minmax(${FEED_MIN}px, ${FEED_MAX}px)`,
+    justifyContent: 'center',
+    gap: GAP,
+    padding: '16px 24px',
+    alignItems: 'start',
+    [theme.custom.media.stacked]: { gridTemplateColumns: 'minmax(0, 1fr)' },
+    [theme.custom.media.phone]: { padding: '12px 16px' },
+  }
+})
 
 /** Fills the row height on desktop so the monitor can take whatever the control bar leaves. */
 export const MonitorColumn = styled('section')(({ theme }) => ({

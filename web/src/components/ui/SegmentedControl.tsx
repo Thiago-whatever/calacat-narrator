@@ -21,7 +21,7 @@ export function SegmentedControl<T extends string | number>({ label, segments, v
   const labelId = useId()
   return (
     <Stack direction="row" spacing="8px" sx={{ alignItems: 'center' }}>
-      <Typography variant="label" id={labelId}>{label}</Typography>
+      <Typography variant="label" id={labelId} className="segmented-label">{label}</Typography>
       <ToggleButtonGroup
         exclusive
         value={value}
