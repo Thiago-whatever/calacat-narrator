@@ -154,6 +154,16 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 
 **Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.
 
+## ADR-024 — Grant model access to the agent workload identity
+
+**Decision:** Assign Cognitive Services OpenAI User on the existing Foundry account to the user-assigned identity intended for Container Apps, not the ingest/interpreter Function identity.
+
+**Why:** The Container Apps agent runtime calls Foundry; granting only that workload identity follows least privilege and avoids giving model access to unrelated Functions.
+
+**How it could be wrong:** If the agent service uses a different managed identity, the deployment will need to attach and authorize that identity instead.
+
+**Revisit when:** The Container App identity or Foundry account changes; verify the deployed agent uses this exact identity before rollout.
+
 ## ADR-029 — Possession-scoped pass streaks
 - **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
 - **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.

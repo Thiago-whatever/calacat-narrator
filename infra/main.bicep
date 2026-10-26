@@ -113,7 +113,7 @@ module foundryRole 'modules/foundry-role.bicep' = {
   name: 'foundry-role-${nameSuffix}'
   scope: resourceGroup(foundryResourceGroupName)
   params: {
-    functionPrincipalId: compute.outputs.functionPrincipalId
+    containerAppsIdentityPrincipalId: compute.outputs.containerAppsIdentityPrincipalId
     foundryAccountName: foundryAccountName
   }
 }

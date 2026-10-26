@@ -25,6 +25,7 @@ Work through **issues → PRs**, not straight to `main`. The history becomes evi
 - Provision MVP resources in East US. The template references the existing Foundry account/project in `rg-calacat`; it does not create another Foundry resource.
 - Cosmos DB includes the serverless `calacat/match-state` database/container used by the interpreter.
 - Runtime access uses managed identities and scoped data-plane roles. Local/shared-key authentication is disabled where supported; public endpoints remain enabled for the MVP and `.azure/` environment state is ignored by Git (ADR-021).
+- The Container Apps user-assigned identity receives Cognitive Services OpenAI User on the existing Foundry account for model calls (ADR-024).
 - Register the Event Hub, Service Bus, App, Web, SignalR Service, and Operational Insights providers before provisioning (A1).
 
 ## Hosting (what runs where)
