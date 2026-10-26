@@ -55,7 +55,8 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 | Editor + recovery fallback (C11) | ✅ #54 |
 | MCP stats server (C18) | ❌ |
 | Push cards to browsers (C12) | ✅ |
-| UI: Reporter (C13), Overlay (C14), Fan (C15) | ❌ |
+| UI: Reporter (C13) | ✅ (`web/`; Static Web Apps deploy pending) |
+| UI: Overlay (C14), Fan (C15) | ❌ |
 | Kick-off endpoint (C16), FT recap (C17) | ❌ |
 | CI (C25) | ❌ (tests only run locally: 74 passing, ruff clean) |
 | Deploy + smoke test (D1), public repo (G1), submission (S1) | ❌ |

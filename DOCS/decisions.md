@@ -215,3 +215,39 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Why:** Agents write short, structured, multilingual cards many times per match and call MCP tools, so speed, cost, tool calling and JSON output matter more than raw intelligence. First choice `gpt-5.4-mini` failed with "Cuota insuficiente" (insufficient quota): the Visual Studio Enterprise subscription has 0 quota for it. `az cognitiveservices usage list` showed `gpt-5-mini` at 500K TPM in East US 2, Sweden Central and East US. Rejected: `gpt-5` (slower, costlier, overkill for cards), `o3-mini`/`o4-mini` (reasoning latency hurts live), and requesting `gpt-5.4-mini` quota (approval can take days).
 - **How it could be wrong:** Even at minimal effort, a reasoning model may be too slow for goal cards. 50K TPM may throttle when 4 agents + Editor fire at once after a goal. Spanish quality is unverified.
 - **Revisit when:** p95 card latency is over ~5 s. Then add a `gpt-4.1-mini` deployment (200K quota, non-reasoning) and point the fast agents at it. On 429 throttling, raise TPM toward 150K, especially before recording the video. If quality falls short for HT/FT recaps, add a second, larger deployment just for the recap agent.
+
+## ADR-031 — Editorial design system adapted for a control room
+- **Decision:** Base the UI on the "Agence Foudre" style reference (warm chalk canvas, forest-green text, magenta accent, condensed display type) with Antonio for display and Instrument Sans for UI. Darken the magenta to `#c0256f`, add a separate live red `#d7261e`, and drop the reference's "no cards, extreme whitespace" rules. Tokens are in `design.md`.
+- **Why:** It gives a premium, recognisable look, but the original magenta fails 4.5:1 with white text and a live console needs density and an unambiguous on-air color.
+- **How it could be wrong:** Pink, red and team colors can compete on one screen, and a light theme may glare in a dark gallery.
+- **Revisit when:** Broadcast users ask for a dark theme, or contrast checks fail on new components.
+
+## ADR-032 — Single-screen Reporter console with edit-in-place on the monitor
+- **Decision:** The Reporter page fits one viewport: program monitor in the middle, ranked feed on the right, a fixed control bar under the monitor. There is no separate editor panel; the reporter edits, drags (free placement, center snap) and resizes the card directly on the monitor, with S/M/L presets. Card geometry is stored as percentages of the monitor.
+- **Why:** The reporter works live and cannot scroll to find controls; editing where the card will appear removes a mental mapping step and frees space for a larger monitor.
+- **How it could be wrong:** Small laptop screens shrink the monitor, and in-place text editing on a busy picture can be fiddly.
+- **Revisit when:** Testing on 13-inch screens or with touch shows mis-hits.
+
+## ADR-033 — Five-second cancellable go-live, and live cards are locked
+- **Decision:** Go live starts a 5-second countdown (Cancel / Esc, or Go live now); only then does the card go on air and a success toast appear. A live card cannot be clicked, edited, moved or removed; the only action is Pull from air, which is immediate.
+- **Why:** The countdown is a last chance to catch a mistake before it reaches viewers, while pulling is the safe action and must never be delayed. Locking prevents accidental edits to what is already broadcast.
+- **How it could be wrong:** Five seconds may feel slow for a goal moment, and locking forces a pull-and-resend to fix a typo on air.
+- **Revisit when:** Reporters routinely press Go live now, or ask to correct live cards.
+
+## ADR-034 — Multiple transmissions, game filter and exclusive focus
+- **Decision:** The console targets one of several outputs (demo: TV 1, TV 2, Stream), each carrying one match and holding its own on-air card. The feed can be filtered by game, and a team or player focus shows only that entity's cards.
+- **Why:** Concurrent matches and parallel feeds are normal in broadcast, and a reporter covering a story needs to cut the feed down to it.
+- **How it could be wrong:** An exclusive focus can hide a critical card from another team; per-output state adds complexity to the backend contract.
+- **Revisit when:** Critical cards are missed under focus (then let goals bypass it), or the overlay delivery contract is designed.
+
+## ADR-035 — Team color only in the silhouette; grey preview, red live
+- **Decision:** On cards, team color appears only in the player silhouette (with jersey number) or the team shield; text, chips and borders stay neutral. Preview cards are grey with a "Preview" badge; live cards keep their colors and get a pulsing red ring and a "Live" badge.
+- **Why:** One color cue per card reads cleanly and avoids clashes with the brand and live colors, while grey vs red makes the on-air state obvious at a glance. Badges keep state readable without color.
+- **How it could be wrong:** Similar team palettes (two blues) lose their distinction in a small silhouette.
+- **Revisit when:** Real fixtures include clashing kits; then add a second kit color or pattern.
+
+## ADR-036 — Reporter console on Static Web Apps with a linked backend and the `reporter` role
+- **Decision:** Host `web/` on Azure Static Web Apps with the Function App as a linked backend, so the console calls `/api/*` on its own origin (`host.json` `routePrefix` is `api`). `staticwebapp.config.json` restricts every route to a `reporter` role (built-in auth, invitations), redirects `401` to sign-in, and sets a CSP of `'self'` plus `wss://*.webpubsub.azure.com` with `frame-ancestors 'none'`. Fonts are bundled, so nothing loads from a third party. When C14 broadcasts go-live, its endpoint checks the `reporter` role in `x-ms-client-principal` itself, not just the SWA route; the public overlay (C14) gets its own anonymous route.
+- **Why:** Same-origin removes CORS and per-environment API URLs. The console is an operator surface: once go-live reaches the overlay, anyone with the URL could otherwise put text on air. A strict CSP limits what injected content could reach, and self-hosted fonts keep working on locked-down broadcast networks.
+- **How it could be wrong:** Linked backends need the Standard SKU, and judges need an invitation to the role. Emotion's inline styles force `style-src 'unsafe-inline'`.
+- **Revisit when:** Inviting reviewers becomes friction (add a read-only demo route), or Emotion gets a CSP nonce.

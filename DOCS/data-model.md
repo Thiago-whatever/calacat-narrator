@@ -161,6 +161,13 @@ hub right after storing it in Cosmos, using the shared workload identity. A fail
 logged and not retried (the card is already stored), and Service Bus redelivery can push a
 card twice, so a browser must deduplicate by `card_id`.
 
-Browsers call `GET /negotiate?match_id=m-0007` and connect to the returned WebSocket
+HTTP routes use the `api` prefix (`host.json`), matching the Static Web Apps linked backend.
+Browsers call `GET /api/negotiate?match_id=m-0007` and connect to the returned WebSocket
 `url`. The URL is valid for 60 minutes, joins only that match's group, and grants no
 send or join roles. Invalid match IDs return `400`; Web PubSub failures return `503`.
+
+After the socket opens, and every 30 s while it stays open, the console calls
+`GET /api/cards?match_id=m-0007`. It returns `{cards, score, match_clock_s}`: unexpired cards
+from a single-partition query on `cards`, plus `score` (goals per team ID) and `match_clock_s`
+from the interpreter's match state. Subscribing first and fetching second means no card is lost
+between the two. Invalid match IDs return `400`; Cosmos failures return `503`.
