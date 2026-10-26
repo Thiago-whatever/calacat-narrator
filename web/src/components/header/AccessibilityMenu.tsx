@@ -1,4 +1,4 @@
-import { Button, Checkbox, FormControlLabel, FormGroup, Popover, Typography } from '@mui/material'
+import { Button, Checkbox, FormControlLabel, FormGroup, Popover, Tooltip, Typography } from '@mui/material'
 import { useId, useState } from 'react'
 import type { ThemePrefs } from '../../theme/theme'
 import { AccessibilityIcon } from '../ui/icons'
@@ -18,9 +18,18 @@ export function AccessibilityMenu({ label, options, shortcuts, prefs, onChange }
   const panelId = useId()
   return (
     <>
-      <Button aria-expanded={open} aria-controls={panelId} onClick={(e) => setAnchor(open ? null : e.currentTarget)} startIcon={<AccessibilityIcon />} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-        {label}
-      </Button>
+      {/* Icon only: the name lives in aria-label and the tooltip. */}
+      <Tooltip title={label}>
+        <Button
+          aria-label={label}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={(e) => setAnchor(open ? null : e.currentTarget)}
+          sx={(theme) => ({ minWidth: theme.custom.sizes.target, width: theme.custom.sizes.target, px: 0 })}
+        >
+          <AccessibilityIcon />
+        </Button>
+      </Tooltip>
       <Popover
         open={open}
         anchorEl={anchor}

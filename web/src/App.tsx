@@ -6,7 +6,7 @@ import type { FeedItem } from './components/feed/FeedCard'
 import type { MatchChip } from './components/feed/FeedFilters'
 import { InsightFeed } from './components/feed/InsightFeed'
 import { Header } from './components/header/Header'
-import { ConsoleMain, ConsoleRoot, MonitorColumn } from './components/layout/ConsoleLayout'
+import { ConsoleMain, ConsoleRoot, MonitorColumn, MonitorFit } from './components/layout/ConsoleLayout'
 import { EditableCard, StaticCard } from './components/monitor/OnScreenCard'
 import { ProgramMonitor } from './components/monitor/ProgramMonitor'
 import { LiveRegion } from './components/ui/primitives'
@@ -242,46 +242,48 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: C
 
       <ConsoleMain>
         <MonitorColumn aria-label={programLabel}>
-          <ProgramMonitor
-            ref={stageRef}
-            label={programLabel}
-            tally={output.name + (air ? ` · ${t.onAir}` : '')}
-            onAir={!!air}
-            home={teams[match.home]}
-            away={teams[match.away]}
-            score={`${goals(match.id, match.home)}–${goals(match.id, match.away)}`}
-            minute={minutes(source.clock)}
-            kickoff={source.phase === 'pre' ? { title: t.kickoff, hint: demo ? t.preHint : t.liveHint } : undefined}
-            guide={moving.guide}
-            drop={drag && { over: drag.over, hint: drag.over ? t.release : t.dragTo }}
-          >
-            {air && <StaticCard card={air.card} team={teamOf(air.card)} geo={air} text={air} mode="live" badge={t.bLive} t={t} />}
-            {s.pending && (
-              <StaticCard
-                card={s.pending.card}
-                team={teamOf(s.pending.card)}
-                geo={s.pending}
-                text={s.pending}
-                mode="pend"
-                badge={`${t.liveIn} ${countdown}`}
-                t={t}
-              />
-            )}
-            {editing && selected && (
-              <EditableCard
-                card={selected}
-                team={teamOf(selected)}
-                geo={s.geo}
-                text={textOf(selected)}
-                t={t}
-                moving={moving.moving}
-                onMoving={onMoving}
-                onGeo={(geo) => dispatch({ type: 'setGeo', geo })}
-                onText={(text) => dispatch({ type: 'edit', key: `${selected.id}:${lang}`, text })}
-                onRemove={() => dispatch({ type: 'clearSelection', message: t.removed })}
-              />
-            )}
-          </ProgramMonitor>
+          <MonitorFit>
+            <ProgramMonitor
+              ref={stageRef}
+              label={programLabel}
+              tally={output.name + (air ? ` · ${t.onAir}` : '')}
+              onAir={!!air}
+              home={teams[match.home]}
+              away={teams[match.away]}
+              score={`${goals(match.id, match.home)}–${goals(match.id, match.away)}`}
+              minute={minutes(source.clock)}
+              kickoff={source.phase === 'pre' ? { title: t.kickoff, hint: demo ? t.preHint : t.liveHint } : undefined}
+              guide={moving.guide}
+              drop={drag && { over: drag.over, hint: drag.over ? t.release : t.dragTo }}
+            >
+              {air && <StaticCard card={air.card} team={teamOf(air.card)} geo={air} text={air} mode="live" badge={t.bLive} t={t} />}
+              {s.pending && (
+                <StaticCard
+                  card={s.pending.card}
+                  team={teamOf(s.pending.card)}
+                  geo={s.pending}
+                  text={s.pending}
+                  mode="pend"
+                  badge={`${t.liveIn} ${countdown}`}
+                  t={t}
+                />
+              )}
+              {editing && selected && (
+                <EditableCard
+                  card={selected}
+                  team={teamOf(selected)}
+                  geo={s.geo}
+                  text={textOf(selected)}
+                  t={t}
+                  moving={moving.moving}
+                  onMoving={onMoving}
+                  onGeo={(geo) => dispatch({ type: 'setGeo', geo })}
+                  onText={(text) => dispatch({ type: 'edit', key: `${selected.id}:${lang}`, text })}
+                  onRemove={() => dispatch({ type: 'clearSelection', message: t.removed })}
+                />
+              )}
+            </ProgramMonitor>
+          </MonitorFit>
 
           <ControlBar
             t={t}

@@ -61,7 +61,7 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, outpu
       </OutputSwitcher>
       <Box
         sx={{
-          display: { xs: 'grid', sm: 'flex' }, gridTemplateColumns: '1fr 1fr', alignItems: 'center', gap: '10px',
+          display: { xs: 'grid', sm: 'flex' }, gridTemplateColumns: '1fr auto', alignItems: 'center', gap: '10px',
           flexWrap: 'wrap', ml: { xs: 0, sm: 'auto' }, width: { xs: '100%', sm: 'auto' },
         }}
       >

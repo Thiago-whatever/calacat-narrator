@@ -28,4 +28,24 @@ export const ConsoleMain = styled('main')(({ theme }) => ({
   [theme.custom.media.phone]: { padding: '12px 16px' },
 }))
 
-export const MonitorColumn = styled('section')({ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 })
+/** Fills the row height on desktop so the monitor can take whatever the control bar leaves. */
+export const MonitorColumn = styled('section')(({ theme }) => ({
+  display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0, alignSelf: 'stretch',
+  // MonitorFit reads this width (cqw) to stop growing once the monitor is width-bound.
+  containerType: 'inline-size',
+  [theme.custom.media.stacked]: { alignSelf: 'start' },
+}))
+
+/**
+ * Fits the 16:9 monitor into the height left above the control bar, however tall the bar wraps.
+ * `chrome` only estimates the column width; this guarantees the bar stays on screen.
+ */
+export const MonitorFit = styled('div')(({ theme }) => ({
+  flex: 1,
+  minHeight: 0,
+  // Never taller than a 16:9 monitor at full column width, so the bar sits right under it.
+  maxHeight: 'calc(100cqw * 9 / 16)',
+  containerType: 'size',
+  '& > [role=region]': { width: 'min(100cqw, 100cqh * 16 / 9)' },
+  [theme.custom.media.stacked]: { flex: 'none', maxHeight: 'none', containerType: 'normal', '& > [role=region]': { width: '100%' } },
+}))
