@@ -156,12 +156,10 @@ deduplicate deliveries by `card_id`.
 
 ## Browser delivery
 
-The `push_cards` Function reads the `cards` container's change feed with its managed
-identity and checkpoints in the `calacat/leases` container. It validates each document
-against the `Card` contract, drops expired cards, and sends each card's JSON to the
-`match-{match_id}` group of the `cards` Web PubSub hub. Failed batches are retried with
-exponential backoff, so a browser can receive a card more than once and must
-deduplicate by `card_id`.
+The Editor sends each card's JSON to the `match-{match_id}` group of the `cards` Web PubSub
+hub right after storing it in Cosmos, using the shared workload identity. A failed push is
+logged and not retried (the card is already stored), and Service Bus redelivery can push a
+card twice, so a browser must deduplicate by `card_id`.
 
 Browsers call `GET /negotiate?match_id=m-0007` and connect to the returned WebSocket
 `url`. The URL is valid for 60 minutes, joins only that match's group, and grants no

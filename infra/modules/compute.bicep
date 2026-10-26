@@ -219,6 +219,14 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
               name: 'COSMOS_CARDS_CONTAINER'
               value: cosmosCardsContainerName
             }
+            {
+              name: 'WEBPUBSUB_HOST_NAME'
+              value: webPubSubHostName
+            }
+            {
+              name: 'WEBPUBSUB_HUB'
+              value: 'cards'
+            }
           ]
         }
       ]

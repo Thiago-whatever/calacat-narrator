@@ -3,15 +3,13 @@
 import logging
 import os
 import time
-from collections.abc import Iterable, Mapping
-from datetime import UTC, datetime
+from collections.abc import Iterable
 from functools import lru_cache
-from typing import Any
 
 from azure.core.exceptions import AzureError
 from azure.identity import DefaultAzureCredential
 from azure.messaging.webpubsubservice import WebPubSubServiceClient
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 
 from .agent_runtime import Card
 from .schemas import MatchId
@@ -44,26 +42,6 @@ def match_group(match_id: str) -> str:
 def validate_match_id(match_id: str) -> str:
     """Reject IDs outside the event contract before they become group names."""
     return _match_id_adapter.validate_python(match_id)
-
-
-def live_cards(documents: Iterable[Mapping[str, Any]], now: datetime | None = None) -> list[Card]:
-    """Keep valid, unexpired cards; Cosmos system fields are dropped before validation."""
-    current = now or datetime.now(UTC)
-    cards = []
-    for document in documents:
-        fields = {key: value for key, value in document.items() if key in Card.model_fields}
-        try:
-            card = Card.model_validate(fields)
-        except ValidationError as error:
-            logger.error(
-                "Skipping invalid card document %s: %s",
-                document.get("id"),
-                error.errors(include_input=False, include_context=False)[:10],
-            )
-            continue
-        if card.expires_at > current:
-            cards.append(card)
-    return cards
 
 
 def publish_cards(cards: Iterable[Card]) -> None:

@@ -187,6 +187,17 @@ resource functionWebPubSubRole 'Microsoft.Authorization/roleAssignments@2022-04-
   }
 }
 
+// The Editor pushes each stored card to its match group.
+resource editorWebPubSubRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(webPubSub.id, containerAppsIdentityPrincipalId, webPubSubServiceOwnerRoleId)
+  scope: webPubSub
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', webPubSubServiceOwnerRoleId)
+    principalId: containerAppsIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource functionCosmosDataRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-04-15' = {
   parent: cosmosAccount
   name: guid(cosmosAccount.id, cosmosDatabaseName, functionPrincipalId, cosmosBuiltInDataContributorRoleId)

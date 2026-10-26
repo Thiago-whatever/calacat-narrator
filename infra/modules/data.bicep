@@ -94,22 +94,6 @@ resource cardsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
-// Change-feed checkpoints for the card push Function.
-resource leasesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-04-15' = {
-  parent: cosmosDatabase
-  name: 'leases'
-  properties: {
-    resource: {
-      id: 'leases'
-      partitionKey: {
-        paths: ['/id']
-        kind: 'Hash'
-        version: 2
-      }
-    }
-  }
-}
-
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-01-01' = {
   parent: storageAccount
   name: 'default'
