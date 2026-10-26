@@ -197,3 +197,21 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.
 - **How it could be wrong:** Some event types such as a foul, shot, or goalkeeper action can have ambiguous possession outcomes in real football.
 - **Revisit when:** Event producers provide more explicit possession outcomes or replay validation shows the interruption policy is too broad or too narrow.
+
+## ADR-030 — Model: `gpt-5-mini` deployed as `narrator-chat`
+- **Extends:** ADR-020 (East US region, low reasoning effort).
+- **Decision:** Deploy `gpt-5-mini` (version 2025-08-07) in Microsoft Foundry, project `calacat-narrator`, resource group `rg-calacat`. The Foundry resource landed in **East US** (`https://calacat-narrator.cognitiveservices.azure.com/`), even though the resource group is in East US 2. Quota is the same in both, so we keep it and deploy the rest of the stack to East US too, keeping traffic in one region.
+  | Parameter | Value | Why |
+  |---|---|---|
+  | Deployment name | `narrator-chat` | Code refers to a role, not a model, so we can swap models without code changes |
+  | Deployment type | Global Standard | Pay per call, highest rate limits, no reserved capacity |
+  | Version | 2025-08-07 | Newest offered for this model |
+  | Auto version upgrade | Off | Behavior must not change during judging (Oct 27 – Nov 10) |
+  | Rate limit | 50K tokens/min (of 500K quota) | Cost brake on the Visual Studio credit; a runaway loop can't drain it |
+  | Content filter | DefaultV2 | Microsoft's standard safety guardrails stay on |
+  | Spillover / PTU | Not used | Not needed at hackathon scale; PTU is expensive |
+  | Auth | Entra ID (no API keys in code) | Public repo; see ADR-018 |
+  | Reasoning effort (in code) | minimal / low | It's a reasoning model; low effort keeps card latency to a few seconds |
+- **Why:** Agents write short, structured, multilingual cards many times per match and call MCP tools, so speed, cost, tool calling and JSON output matter more than raw intelligence. First choice `gpt-5.4-mini` failed with "Cuota insuficiente" (insufficient quota): the Visual Studio Enterprise subscription has 0 quota for it. `az cognitiveservices usage list` showed `gpt-5-mini` at 500K TPM in East US 2, Sweden Central and East US. Rejected: `gpt-5` (slower, costlier, overkill for cards), `o3-mini`/`o4-mini` (reasoning latency hurts live), and requesting `gpt-5.4-mini` quota (approval can take days).
+- **How it could be wrong:** Even at minimal effort, a reasoning model may be too slow for goal cards. 50K TPM may throttle when 4 agents + Editor fire at once after a goal. Spanish quality is unverified.
+- **Revisit when:** p95 card latency is over ~5 s. Then add a `gpt-4.1-mini` deployment (200K quota, non-reasoning) and point the fast agents at it. On 429 throttling, raise TPM toward 150K, especially before recording the video. If quality falls short for HT/FT recaps, add a second, larger deployment just for the recap agent.
