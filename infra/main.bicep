@@ -83,12 +83,14 @@ module compute 'modules/compute.bicep' = {
     cosmosEndpoint: data.outputs.cosmosEndpoint
     cosmosDatabaseName: data.outputs.cosmosDatabaseName
     cosmosContainerName: data.outputs.cosmosContainerName
+    cosmosCardsContainerName: data.outputs.cosmosCardsContainerName
     eventHubNamespaceName: messaging.outputs.eventHubNamespaceName
     eventHubName: messaging.outputs.eventHubName
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
     serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
     serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing']
+    serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'tactical', 'player-milestones']
     webPubSubHostName: observability.outputs.webPubSubHostName
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     foundryAccountResourceId: foundryAccount.id
@@ -107,11 +109,13 @@ module roles 'modules/roles.bicep' = {
     storageAccountName: data.outputs.storageAccountName
     cosmosAccountName: data.outputs.cosmosAccountName
     cosmosDatabaseName: data.outputs.cosmosDatabaseName
+    cosmosCardsContainerName: data.outputs.cosmosCardsContainerName
     eventHubNamespaceName: messaging.outputs.eventHubNamespaceName
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
     serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
     serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing']
+    serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'tactical', 'player-milestones']
     webPubSubName: observability.outputs.webPubSubName
     containerRegistryName: compute.outputs.containerRegistryName
   }
@@ -140,6 +144,7 @@ output serviceBusTopicName string = messaging.outputs.serviceBusTopicName
 output candidatesTopicName string = messaging.outputs.candidatesTopicName
 output webPubSubName string = observability.outputs.webPubSubName
 output agentRuntimeName string = compute.outputs.agentRuntimeName
+output editorRuntimeName string = compute.outputs.editorRuntimeName
 output foundryAccountResourceId string = foundryAccount.id
 output foundryProjectResourceId string = foundryProject.id
 output foundryProjectEndpoint string = foundryProject.properties.endpoints['AI Foundry API']

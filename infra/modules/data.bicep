@@ -76,6 +76,22 @@ resource matchStateContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases
   }
 }
 
+resource cardsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-04-15' = {
+  parent: cosmosDatabase
+  name: 'cards'
+  properties: {
+    resource: {
+      id: 'cards'
+      partitionKey: {
+        paths: ['/match_id']
+        kind: 'Hash'
+        version: 2
+      }
+      defaultTtl: -1
+    }
+  }
+}
+
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
 output cosmosAccountName string = cosmosAccount.name
@@ -83,3 +99,4 @@ output cosmosAccountId string = cosmosAccount.id
 output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
 output cosmosDatabaseName string = cosmosDatabase.name
 output cosmosContainerName string = matchStateContainer.name
+output cosmosCardsContainerName string = cardsContainer.name

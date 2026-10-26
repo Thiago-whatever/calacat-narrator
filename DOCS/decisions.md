@@ -186,6 +186,12 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **How it could be wrong:** The triggering pass's context does not describe every pass in the streak, so this specialist cannot make aggregate claims about the sequence.
 - **Revisit when:** The interpreter computes deterministic sequence-level pass metrics or the specialist receives validated match-stat tools.
 
+## ADR-028 — Rank, persist, and recover Editor cards deterministically
+- **Decision:** The Editor ranks candidates using application-owned topic weights, rarity, match-clock recency decay, and optional focus relevance from `editor.yaml`; critical goal, red-card, and penalty topics preempt the normal rate limit and are not topic-deduped against one another, so every critical event can surface. Stable card IDs make retries idempotent. Normal cards are topic-deduped per match and emitted no more than once per 25 seconds from a queue capped at eight; noncritical fallback cards use this same budget. The Editor writes append-only `Card` documents to `calacat/cards`, partitioned by `match_id`, with Cosmos `id=card_id` and item TTL copied from `ttl_s`. Valid signals and candidates in their respective dead-letter queues produce deterministic templated fallback cards.
+- **Why:** A bounded, reproducible editorial budget prevents a live feed from being overwhelmed, while a stable append-only card contract supports downstream push and DLQ recovery without trusting model-authored metrics or provenance.
+- **How it could be wrong:** The in-memory editorial queue and deduplication state are reset on worker restart, so candidates still locked in Service Bus are redelivered but topic history is not durable; configured topic weights and relevance also need replay-based tuning.
+- **Revisit when:** Multiple editor replicas or durable cross-restart topic deduplication are required, or replay evaluation shows the configured ranking obscures important stories.
+
 ## ADR-029 — Possession-scoped pass streaks
 - **Decision:** A current pass streak and its evidence event IDs cover only completed passes in one uninterrupted possession. Possession-change and other event contracts that indicate lost possession or new control reset the affected team and player streaks.
 - **Why:** A team must not accumulate a pass-streak signal across turnovers, and the evidence must explain exactly the current streak.
