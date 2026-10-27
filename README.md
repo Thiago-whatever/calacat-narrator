@@ -78,7 +78,7 @@ No sign-in is needed. The console is a **receive-only demo build**, not a produc
 3. Click a card (or press J/K, then Enter) to place it on the program monitor. You can drag it, resize it or edit its text.
 4. Press **Go live on TV 1**. A 5-second countdown runs, which you can cancel; then the card is on air. **Pull from air** (or Esc) removes it.
 5. Switch between TV 1, TV 2 and Stream; each output holds its own on-air card.
-6. Press **Open overlay** for a tab that shows only the on-air card for one output.
+6. Press **Open on-air output** for a tab that shows what viewers of one output see: only the card on air, with an ON AIR / OFF AIR tally. The **ⓘ** button in the header explains the demo, the live match and these steps.
 7. Try **EN / ES**, and the **Accessibility** menu: high contrast, larger text, reduced motion and keyboard shortcuts.
 
 ### 2. A live match narrated by the agents
