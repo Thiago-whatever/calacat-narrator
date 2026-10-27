@@ -1,5 +1,6 @@
 import { Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import { useId } from 'react'
+import { SrOnly } from './primitives'
 
 export interface Segment<T extends string | number> {
   value: T
@@ -14,14 +15,18 @@ interface Props<T extends string | number> {
   value: T | null
   onChange: (value: T) => void
   disabled?: boolean
+  /** Keep the label for assistive tech only (e.g. the EN | ES switch, whose options say it all). */
+  hideLabel?: boolean
+  /** 44px instead of 56px, for the header. */
+  compact?: boolean
 }
 
-/** Exclusive choice shown as a 56px segmented control (control-bar size presets). */
-export function SegmentedControl<T extends string | number>({ label, segments, value, onChange, disabled }: Props<T>) {
+/** Exclusive choice shown as a segmented control: control-bar size presets, the language switch. */
+export function SegmentedControl<T extends string | number>({ label, segments, value, onChange, disabled, hideLabel, compact }: Props<T>) {
   const labelId = useId()
   return (
     <Stack direction="row" spacing="8px" sx={{ alignItems: 'center' }}>
-      <Typography variant="label" id={labelId} className="segmented-label">{label}</Typography>
+      {hideLabel ? <SrOnly id={labelId}>{label}</SrOnly> : <Typography variant="label" id={labelId} className="segmented-label">{label}</Typography>}
       <ToggleButtonGroup
         exclusive
         value={value}
@@ -29,7 +34,7 @@ export function SegmentedControl<T extends string | number>({ label, segments, v
         aria-labelledby={labelId}
         disabled={disabled}
         sx={(theme) => ({
-          height: theme.custom.sizes.targetLarge,
+          height: compact ? theme.custom.sizes.target : theme.custom.sizes.targetLarge,
           border: `2px solid ${theme.custom.colors.line}`,
           borderRadius: `${theme.custom.radii.large}px`,
           p: '4px',

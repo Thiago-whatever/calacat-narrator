@@ -20,4 +20,10 @@ export function topicLabel(t: Strings, topic: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-export const minutes = (seconds: number) => `${Math.floor(seconds / 60)}’`
+const HALF_TIME_S = 45 * 60
+
+/** On-air minute, matching the backend's `broadcast_minute`: 0:00-0:59 is 1', capped at 45' and 90'. */
+export const minutes = (seconds: number) => {
+  const minute = Math.floor(seconds / 60) + 1
+  return `${Math.min(minute, seconds < HALF_TIME_S ? 45 : 90)}’`
+}

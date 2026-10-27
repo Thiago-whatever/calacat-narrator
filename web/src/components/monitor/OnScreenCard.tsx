@@ -122,7 +122,7 @@ function CardFace({ card, team, t, silent, children }: FaceProps) {
     <Body>
       <Silhouette team={team} player={card.player} t={t} hidden={silent} size="5.2em" radius=".9em" />
       <TextCol>
-        <Who>{card.player ? `#${card.player.num} ${card.player.name}` : team.name}</Who>
+        <Who>{card.player ? `#${card.player.num} ${card.player.name} · ${team.name}` : team.name}</Who>
         {children}
       </TextCol>
     </Body>

@@ -55,6 +55,10 @@ interface LiveCard {
   source: string
   match_clock_s: number
   expires_at: string
+  team_id?: string
+  player_id?: string
+  /** Spanish caption from the Reviewer (ADR-040). */
+  i18n?: { es?: { headline: string; body: string } }
 }
 
 const isString = (v: unknown): v is string => typeof v === 'string'
@@ -67,15 +71,26 @@ export function parseLiveCard(data: unknown): LiveCard | null {
     isString(c.card_id) && isString(c.match_id) && isString(c.headline) && isString(c.body) &&
     isString(c.topic) && isString(c.source) && isString(c.expires_at) &&
     isNumber(c.salience) && isNumber(c.match_clock_s) &&
-    Array.isArray(c.entity_ids) && c.entity_ids.every(isString)
-  return ok ? (c as unknown as LiveCard) : null
+    Array.isArray(c.entity_ids) && c.entity_ids.every(isString) &&
+    (c.team_id === undefined || isString(c.team_id)) &&
+    (c.player_id === undefined || c.player_id === null || isString(c.player_id))
+  if (!ok) return null
+  const es = (c.i18n as { es?: Record<string, unknown> } | undefined)?.es
+  const validEs = es && isString(es.headline) && isString(es.body) ? { headline: es.headline, body: es.body } : undefined
+  return { ...(c as unknown as LiveCard), player_id: isString(c.player_id) ? c.player_id : undefined, i18n: validEs && { es: validEs } }
 }
 
 export function toFeedCard(card: LiveCard, homeTeam: string): FeedCard {
-  const player = card.entity_ids.map((id) => playerById.get(id)).find(Boolean)
-  const team = player?.team ?? card.entity_ids.find((id) => id in catalogTeams) ?? homeTeam
-  // Cards are written per language upstream; until the Personalizer lands both slots carry the same text.
-  const text = { h: card.headline, b: card.body }
+  // Cards name their player and team (ADR-041); older cards only list entity IDs.
+  const player = (card.player_id && playerById.get(card.player_id)) || card.entity_ids.map((id) => playerById.get(id)).find(Boolean)
+  const team =
+    (card.team_id && card.team_id in catalogTeams ? card.team_id : undefined) ??
+    player?.team ??
+    card.entity_ids.find((id) => id in catalogTeams) ??
+    homeTeam
+  const en = { h: card.headline, b: card.body }
+  // English is canonical; the Reviewer's Spanish rides along in i18n.es (ADR-040).
+  const es = card.i18n?.es ? { h: card.i18n.es.headline, b: card.i18n.es.body } : en
   return {
     id: card.card_id,
     match: card.match_id,
@@ -86,7 +101,7 @@ export function toFeedCard(card: LiveCard, homeTeam: string): FeedCard {
     critical: CRITICAL_TOPICS.has(card.topic),
     salience: card.salience,
     specialist: card.source === 'fallback' ? { en: 'Editor fallback', es: 'Respaldo del editor' } : undefined,
-    text: { en: text, es: text },
+    text: { en, es },
     expiresAt: Date.parse(card.expires_at),
   }
 }
