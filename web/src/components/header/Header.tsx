@@ -73,7 +73,8 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
         }}
       >
         {run && (
-          <Button variant="contained" onClick={run.onToggle} startIcon={run.running ? <PauseIcon /> : <PlayIcon />} sx={{ minWidth: { sm: 150 }, gridColumn: '1 / -1' }}>
+          // Next to Start live match, the demo is the secondary action, so the two never look alike.
+          <Button variant={start ? 'outlined' : 'contained'} onClick={run.onToggle} startIcon={run.running ? <PauseIcon /> : <PlayIcon />} sx={{ minWidth: { sm: 150 }, gridColumn: '1 / -1' }}>
             {run.label}
           </Button>
         )}

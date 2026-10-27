@@ -33,7 +33,7 @@ export function startMessage(t: Strings, state: StartState): string {
   }
 }
 
-/** The "Start a match" button: the server picks the seed and speed; on success the console follows the new match. */
+/** The "Start live match" button: the server picks the seed and speed; on success the console follows the new match. */
 export function useMatchStarter(apiBase: string, onStarted: (matchId: string) => void) {
   const [state, setState] = useState<StartState>({ status: 'idle' })
   const start = async () => {
