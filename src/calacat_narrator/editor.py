@@ -9,8 +9,17 @@ from uuid import NAMESPACE_URL, uuid5
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .agent_runtime import Candidate, Card
-from .signals import PassEventContext, PenaltyEventContext, ShotEventContext, Signal
+from .agent_runtime import (
+    BODY_MAX,
+    HEADLINE_MAX,
+    Candidate,
+    Card,
+    event_facts,
+    signal_facts,
+    signal_player_id,
+    signal_team_id,
+)
+from .signals import ShotEventContext, Signal
 
 
 class EditorConfig(BaseModel):
@@ -123,13 +132,17 @@ class Editor:
                 queued.candidate.candidate_id,
             ),
         )
-        keep_ids = {queued.candidate.candidate_id for queued in ranked[: self.config.queue_capacity]}
+        keep_ids = {
+            queued.candidate.candidate_id for queued in ranked[: self.config.queue_capacity]
+        }
         dropped = tuple(
             queued.candidate.candidate_id
             for queued in self._queue
             if queued.candidate.candidate_id not in keep_ids
         )
-        self._queue = [queued for queued in self._queue if queued.candidate.candidate_id in keep_ids]
+        self._queue = [
+            queued for queued in self._queue if queued.candidate.candidate_id in keep_ids
+        ]
         if candidate.candidate_id not in keep_ids:
             return Submission(accepted=False)
         self._queue.append(queued_candidate)
@@ -185,11 +198,7 @@ class Editor:
     def mark_published(self, candidate_id: str, *, now: datetime | None = None) -> None:
         published_at = _aware_now(now)
         queued = next(
-            (
-                item
-                for item in self._queue
-                if item.candidate.candidate_id == candidate_id
-            ),
+            (item for item in self._queue if item.candidate.candidate_id == candidate_id),
             None,
         )
         if queued is not None:
@@ -201,9 +210,7 @@ class Editor:
 
     def remove(self, candidate_id: str) -> None:
         self._queue = [
-            queued
-            for queued in self._queue
-            if queued.candidate.candidate_id != candidate_id
+            queued for queued in self._queue if queued.candidate.candidate_id != candidate_id
         ]
 
     def _make_card(
@@ -231,7 +238,10 @@ class Editor:
     def _focus_relevance(self, candidate: Candidate) -> float:
         if self._focus is None:
             return 1.0
-        focused_values = {candidate.topic.lower(), *(entity.lower() for entity in candidate.entity_ids)}
+        focused_values = {
+            candidate.topic.lower(),
+            *(entity.lower() for entity in candidate.entity_ids),
+        }
         return (
             self.config.focus_match_relevance
             if self._focus in focused_values
@@ -244,36 +254,46 @@ class Editor:
         }
 
 
+def _fit(text: str, limit: int) -> str:
+    """Shorten at a word boundary so templates never exceed the caption limits."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def template_caption(kind: str, facts: dict[str, str]) -> tuple[str, str]:
+    """Broadcast-voice headline and body built only from facts (ADR-038)."""
+    team, minute, event = facts["team"], facts["minute"], facts["event"]
+    score = f" It's {facts['score']}." if "score" in facts else ""
+    if kind == "goal":
+        headline = f"{facts.get('player', team)} scores for {team}"
+        detail = f" with {facts['detail']}" if "detail" in facts else ""
+        body = f"{minute} {event}{detail}.{score}"
+    elif kind == "penalty":
+        headline = f"Penalty to {team}"
+        body = f"{minute} {event} against {facts['opponent']}.{score}"
+    elif kind == "red_card":
+        headline = f"Red card for {team}"
+        body = f"{minute} {event}. They play on a player down.{score}"
+    elif kind == "shot_volume":
+        headline = f"{team} keep shooting"
+        body = f"{minute} {event}, pushing {facts['opponent']} back.{score}"
+    elif kind == "pass_streak":
+        headline = f"{team} keep the ball"
+        body = f"{minute} {event}, keeping {facts['opponent']} chasing.{score}"
+    else:
+        headline = f"{team} in the {facts['half']}"
+        body = f"{minute} {event}.{score}"
+    return _fit(headline, HEADLINE_MAX), _fit(body, BODY_MAX)
+
+
 def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None = None) -> Card:
     """Build a deterministic, evidence-preserving card when specialist delivery fails."""
     created_at = _aware_now(now)
-    clock = f"{signal.match_clock_s // 60}:{signal.match_clock_s % 60:02d}"
     metrics: dict[str, int | float] = {signal.kind: signal.value}
     if isinstance(signal.event_context, ShotEventContext):
         metrics["shot_speed_kmh"] = signal.event_context.speed_kmh
-        headline = "Goal - confirmed event" if signal.kind == "goal" else "Shot update"
-        body = (
-            f"A goal was recorded at {clock}; verified shot speed is "
-            f"{signal.event_context.speed_kmh:g} km/h."
-            if signal.kind == "goal"
-            else f"A shot update was recorded at {clock}; verified shot speed is "
-            f"{signal.event_context.speed_kmh:g} km/h."
-        )
-    elif isinstance(signal.event_context, PenaltyEventContext):
-        headline = "Penalty - award recorded"
-        body = f"A penalty was awarded at {clock}; the recorded intent was {signal.event_context.intent}."
-    elif signal.kind == "red_card":
-        headline = "Red card - event recorded"
-        body = f"A red card was recorded at {clock}; this is the team's red card number {signal.value}."
-    elif isinstance(signal.event_context, PassEventContext):
-        headline = f"{signal.kind.replace('_', ' ').title()} - verified update"
-        body = f"A {signal.kind.replace('_', ' ')} update was recorded at {clock}."
-    else:
-        headline = f"{signal.kind.replace('_', ' ').title()} - verified update"
-        body = (
-            f"A {signal.kind.replace('_', ' ')} update was recorded at {clock}; "
-            f"the verified signal value is {signal.value}."
-        )
+    headline, body = template_caption(signal.kind, signal_facts(signal))
 
     candidate = Candidate(
         candidate_id=str(uuid5(NAMESPACE_URL, f"calacat:fallback:{signal.signal_id}")),
@@ -284,6 +304,8 @@ def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None 
         metrics=metrics,
         evidence_event_ids=signal.evidence_event_ids,
         entity_ids=list(signal.entity.values()),
+        team_id=signal_team_id(signal),
+        player_id=signal_player_id(signal),
         topic=signal.kind,
         self_salience=1.0,
         ttl_s=min(config.default_ttl_s, config.max_ttl_s),
@@ -300,15 +322,19 @@ def fallback_candidate_card(
 ) -> Card:
     """Replace a dead-lettered narrative with a template over verified candidate fields."""
     created_at = _aware_now(now)
-    clock = f"{candidate.match_clock_s // 60}:{candidate.match_clock_s % 60:02d}"
-    headline = f"{candidate.topic.replace('_', ' ').title()} - verified update"
-    metric_name, metric_value = next(iter(sorted(candidate.metrics.items())))
-    body = (
-        f"A {candidate.topic.replace('_', ' ')} update was recorded at {clock}; "
-        f"verified {metric_name} is {metric_value:g}."
+    facts = event_facts(
+        kind=candidate.topic,
+        value=int(candidate.metrics.get(candidate.topic, 0)),
+        clock_s=candidate.match_clock_s,
+        team_id=candidate.team_id,
+        player_id=candidate.player_id,
+        speed_kmh=candidate.metrics.get("shot_speed_kmh"),
     )
+    headline, body = template_caption(candidate.topic, facts)
     fallback = Candidate(
-        candidate_id=str(uuid5(NAMESPACE_URL, f"calacat:fallback-candidate:{candidate.candidate_id}")),
+        candidate_id=str(
+            uuid5(NAMESPACE_URL, f"calacat:fallback-candidate:{candidate.candidate_id}")
+        ),
         signal_id=candidate.signal_id,
         match_id=candidate.match_id,
         headline=headline,
@@ -316,6 +342,8 @@ def fallback_candidate_card(
         metrics=candidate.metrics,
         evidence_event_ids=candidate.evidence_event_ids,
         entity_ids=candidate.entity_ids,
+        team_id=candidate.team_id,
+        player_id=candidate.player_id,
         topic=candidate.topic,
         self_salience=1.0,
         ttl_s=min(config.default_ttl_s, config.max_ttl_s, candidate.ttl_s),

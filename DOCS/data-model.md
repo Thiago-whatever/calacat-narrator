@@ -75,7 +75,8 @@ file because `/ingest` accepts event envelopes.
 { "signal_id": "...", "match_id": "m-0007", "kind": "goal", "match_clock_s": 4020,
   "entity": {"team_id": "t-home"}, "value": 2,
   "event_context": {"event_type": "shot", "event_id": "evt-0042", "period": 2,
-    "outcome": "goal", "speed_kmh": 104, "body_part": "foot"},
+    "player_id": "p-nbr-09", "outcome": "goal", "speed_kmh": 104, "body_part": "foot"},
+  "score": {"t-home": 2, "t-away": 1},
   "evidence_event_ids": ["evt-0042"], "tier": 1 }
 ```
 Gate rules live in `src/calacat_narrator/data/signals.yaml` (ADR-013): `min_sample`,
@@ -104,11 +105,31 @@ Cosmos ETags protect concurrent writes.
 
 ## Agent candidates and cards
 
+Every signal also carries `score`, the goals per team after the triggering event (teams
+without a goal are omitted), and shot contexts carry the shooter's `player_id`.
+
 The Container Apps agent runtime consumes one configured filtered subscription from
-`signals` using Entra ID. It asks the Foundry `narrator-chat` deployment for only the
-candidate headline, explanation, and salience, with low reasoning effort and a Pydantic
-structured response. The application attaches the validated signal's metric, entity,
-match clock, and evidence IDs; the model cannot replace that provenance. Candidate IDs
+`signals` using Entra ID. The signal is **not** put in the prompt (ADR-038). Instead the
+specialist gets one Agent Framework function tool, `get_event_facts`, which returns plain
+facts built in code from the catalog and the signal, with no IDs or field names:
+
+```json
+{ "minute": "57'", "half": "second half", "team": "Northbridge Comets",
+  "opponent": "Southmere Foxes", "player": "Bram Elsen",
+  "score": "Northbridge Comets 2, Southmere Foxes 1",
+  "event": "Bram Elsen scored for Northbridge Comets", "detail": "a 94 km/h strike" }
+```
+
+The Foundry `narrator-chat` deployment returns only a broadcast caption (headline ≤60
+characters, `why_it_matters` ≤180 characters) and a salience, with low reasoning effort
+and a Pydantic structured response. A validator rejects snake_case tokens, catalog,
+event and UUID identifiers, raw seconds, and the words signal, evidence, data, metric or
+match clock; a rejected draft fails the message, which goes through the existing Service
+Bus retry and dead-letter fallback. The application attaches the validated signal's
+metric, entity, `team_id`, `player_id`, match clock and evidence IDs; the model cannot
+replace that provenance. Editor fallback cards use the same facts and limits in a fixed
+caption voice ("Bram Elsen scores for Northbridge Comets" / "57' Bram Elsen scored for
+Northbridge Comets with a 94 km/h strike. It's Northbridge Comets 2, Southmere Foxes 1."). Candidate IDs
 are deterministic per specialist and signal, so retries use Service Bus duplicate
 detection on the `candidates` topic.
 
@@ -122,6 +143,8 @@ detection on the `candidates` topic.
   "metrics": { "goal": 2, "shot_speed_kmh": 104 },
   "evidence_event_ids": ["evt-0042"],
   "entity_ids": ["t-home"],
+  "team_id": "t-home",
+  "player_id": "p-nbr-09",
   "topic": "goal",
   "self_salience": 0.8,
   "ttl_s": 180,
@@ -153,6 +176,8 @@ deduplicate deliveries by `card_id`.
   "metrics": { "goal": 2 },
   "evidence_event_ids": ["evt-0042"],
   "entity_ids": ["t-home"],
+  "team_id": "t-home",
+  "player_id": "p-nbr-09",
   "topic": "goal",
   "salience": 1.0,
   "source": "specialist",

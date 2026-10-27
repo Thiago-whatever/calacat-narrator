@@ -78,6 +78,7 @@ class FakeGenerator:
             metrics={"goal": signal.value},
             evidence_event_ids=signal.evidence_event_ids,
             entity_ids=list(signal.entity.values()),
+            team_id="t-home",
             topic=signal.kind,
             self_salience=1,
             match_clock_s=signal.match_clock_s,
