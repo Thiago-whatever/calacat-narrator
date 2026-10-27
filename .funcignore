@@ -7,7 +7,6 @@
 __pycache__
 node_modules
 DOCS
-RULES
 infra
 tests
 Dockerfile
