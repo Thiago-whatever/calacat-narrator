@@ -49,8 +49,6 @@ def make_pass(
             "speed_kmh": 63,
             "outcome": "complete",
             "height": "ground",
-            "difficulty": 0.4,
-            "inside_opp_shape": True,
         },
         team_id=team_id,
         player_id=player_id,
@@ -69,8 +67,6 @@ def test_interpreter_reduces_hand_built_event_list_to_match_and_entity_stats() -
                 "speed_kmh": 63,
                 "outcome": "complete",
                 "height": "ground",
-                "difficulty": 0.4,
-                "inside_opp_shape": True,
             },
         ),
         make_event(
@@ -83,8 +79,6 @@ def test_interpreter_reduces_hand_built_event_list_to_match_and_entity_stats() -
                 "speed_kmh": 57,
                 "outcome": "complete",
                 "height": "ground",
-                "difficulty": 0.3,
-                "inside_opp_shape": True,
             },
         ),
         make_event(
@@ -95,7 +89,6 @@ def test_interpreter_reduces_hand_built_event_list_to_match_and_entity_stats() -
                 "outcome": "goal",
                 "goal_y": 3.66,
                 "goal_z": 1.2,
-                "xg": 0.4,
                 "body_part": "foot",
             },
         ),
@@ -135,8 +128,6 @@ def test_interpreter_skips_duplicate_and_stale_sequences() -> None:
             "speed_kmh": 63,
             "outcome": "complete",
             "height": "ground",
-            "difficulty": 0.4,
-            "inside_opp_shape": True,
         },
     )
 

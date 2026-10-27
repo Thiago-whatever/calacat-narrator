@@ -3,7 +3,9 @@ import json
 import pytest
 
 from calacat_narrator.catalog import load_catalog
+from calacat_narrator.interpreter import apply_event
 from calacat_narrator.schemas import MatchEvent, PositionSnapshot
+from calacat_narrator.signals import evaluate_signals, load_signal_rules
 from calacat_narrator.simulator import SeededMatch, main, serialize_record, simulate_match
 
 
@@ -66,3 +68,100 @@ def test_cli_writes_complete_offline_jsonl(tmp_path) -> None:
 def test_cli_rejects_zero_speed() -> None:
     with pytest.raises(SystemExit):
         main(["--speed", "0", "--duration-s", "4"])
+
+
+# ---- Realism and facts-only checks over 20 full matches (ADR-037)
+
+CALIBRATION_SEEDS = range(20)
+ON_BALL_EVENTS = {"pass", "duel", "possession_change", "shot"}
+
+
+@pytest.fixture(scope="module")
+def full_matches() -> dict[int, list[MatchEvent]]:
+    catalog = load_catalog()
+    return {
+        seed: [
+            record
+            for record in simulate_match(seed, catalog=catalog)
+            if isinstance(record, MatchEvent)
+        ]
+        for seed in CALIBRATION_SEEDS
+    }
+
+
+def _count(events: list[MatchEvent], event_type: str, **payload: object) -> int:
+    return sum(
+        1
+        for event in events
+        if event.type == event_type
+        and all(getattr(event.payload, key) == value for key, value in payload.items())
+    )
+
+
+def test_full_matches_have_realistic_goals_and_shots(full_matches) -> None:
+    goals = [_count(events, "shot", outcome="goal") for events in full_matches.values()]
+    shots = [_count(events, "shot") for events in full_matches.values()]
+
+    assert 2.2 <= sum(goals) / len(goals) <= 3.4
+    assert max(goals) <= 8
+    assert 18 <= sum(shots) / len(shots) <= 32
+
+
+def test_full_matches_turn_the_ball_over_and_award_penalties(full_matches) -> None:
+    assert all(_count(events, "possession_change") >= 150 for events in full_matches.values())
+    assert sum(_count(events, "set_piece", kind="penalty") for events in full_matches.values()) >= 1
+
+
+def test_goalkeeper_saves_follow_only_saved_shots(full_matches) -> None:
+    for events in full_matches.values():
+        shots = {event.event_id: event for event in events if event.type == "shot"}
+        for event in events:
+            if event.type == "gk_action":
+                assert shots[event.payload.shot_event_id].payload.outcome == "saved"
+
+
+def test_conceding_team_kicks_off_after_a_goal(full_matches) -> None:
+    for events in full_matches.values():
+        for index, event in enumerate(events):
+            if event.type == "shot" and event.payload.outcome == "goal":
+                # Pressure and fouls carry the defending team's ID, so look at on-ball actions.
+                restart = next((e for e in events[index + 1 :] if e.type in ON_BALL_EVENTS), None)
+                if restart is not None and restart.period == event.period:
+                    assert restart.team_id != event.team_id
+
+
+def test_ball_can_move_backwards(full_matches) -> None:
+    events = full_matches[0]
+    backward = [
+        event
+        for event in events
+        if event.type == "pass"
+        and (event.payload.end_x - event.x) * (1 if event.team_id == "t-home" else -1) < 0
+    ]
+    assert backward
+
+
+def test_events_are_facts_only_and_validate(full_matches) -> None:
+    for events in full_matches.values():
+        for event in events:
+            dumped = event.model_dump(mode="json")
+            assert MatchEvent.model_validate(dumped) == event
+            assert {"xg", "difficulty", "inside_opp_shape"}.isdisjoint(dumped["payload"])
+
+
+def test_full_match_is_byte_identical_for_a_seed() -> None:
+    first = "\n".join(serialize_record(record) for record in simulate_match(seed=11))
+    second = "\n".join(serialize_record(record) for record in simulate_match(seed=11))
+    assert first == second
+
+
+def test_threshold_signals_fire_beyond_goals() -> None:
+    kinds: set[str] = set()
+    rules = load_signal_rules()
+    for seed in (101, 202, 303):
+        state = None
+        for record in simulate_match(seed):
+            if isinstance(record, MatchEvent):
+                state, _ = apply_event(state, record)
+                kinds.update(signal.kind for signal in evaluate_signals(state, record, rules))
+    assert {"goal", "shot_volume", "pass_streak"} <= kinds

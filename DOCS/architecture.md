@@ -47,7 +47,7 @@ flowchart LR
 | Agent | Subscribes to | Produces |
 |---|---|---|
 | Goal & Shot | `goal`, `shot_volume`, `penalty` | Chance quality, shot speed, goal timing context |
-| Build-up & Passing | `pass_streak`, `pass_milestone`, `progression` | Pass difficulty, receptions inside the opponent's shape |
+| Build-up & Passing | `pass_streak`, `pass_milestone`, `progression` | Passing sequences and who kept the ball |
 | Tactical | `pressure_shift`, `attack_side_shift`, `rhythm_change` | Control vs chaos, point-of-attack changes, fullback inversion |
 | Player / Milestones | `speed_threshold`, `distance_threshold`, `record` | Player tagging, records |
 | Editor | all candidates + DLQ | Ranked, deduped, rate-limited cards; HT/FT recap trigger |

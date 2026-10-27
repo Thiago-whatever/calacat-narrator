@@ -32,8 +32,6 @@ class PassPayload(ContractModel):
     speed_kmh: SpeedKmh
     outcome: Literal["complete", "incomplete", "out"]
     height: Literal["ground", "low", "high"]
-    difficulty: float = Field(ge=0, le=1)
-    inside_opp_shape: bool
 
 
 class ShotPayload(ContractModel):
@@ -41,7 +39,6 @@ class ShotPayload(ContractModel):
     outcome: Literal["goal", "saved", "off", "blocked"]
     goal_y: Annotated[float, Field(ge=0, le=7.32)]
     goal_z: Annotated[float, Field(ge=0, le=2.44)]
-    xg: float = Field(ge=0, le=1)
     body_part: Literal["foot", "head", "other"]
 
 

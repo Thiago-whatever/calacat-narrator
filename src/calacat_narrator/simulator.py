@@ -16,14 +16,30 @@ from urllib.request import Request, urlopen
 
 from .catalog import FootballCatalog, Player, load_catalog
 from .schemas import (
+    CardPayload,
+    DuelPayload,
+    FoulPayload,
+    GoalkeeperActionPayload,
     MatchEvent,
+    PassPayload,
     PeriodPayload,
     PlayerPosition,
     PositionSnapshot,
+    PossessionChangePayload,
+    PressurePayload,
+    SetPiecePayload,
     ShotPayload,
 )
 
 MATCH_DURATION_S = 90 * 60
+PITCH_LENGTH = 105.0
+PITCH_WIDTH = 68.0
+BOX_DEPTH = 16.5
+BOX_HALF_WIDTH = 20.16
+PENALTY_SPOT = 11.0
+# Internal model parameters: they decide outcomes but are never emitted (ADR-037).
+SHOT_RANGE = 32.0
+PENALTY_CONVERSION = 0.76
 KICKOFF = datetime(2026, 1, 1, tzinfo=UTC)
 HOME_FORMATION = (
     (6, 34),
@@ -148,16 +164,272 @@ class SeededMatch:
             ball={"x": round(self.ball_x, 2), "y": round(self.ball_y, 2), "z": 0},
         )
 
-    def _actor_location(
-        self, player: Player, locations: dict[str, tuple[float, float, float]]
-    ) -> tuple[float, float]:
-        x, y, _ = locations[player.id]
-        return x, y
+    # ---- Geometry. Home attacks +x; every on-ball event happens where the ball is.
 
-    def _advance_ball(self, team_id: str) -> None:
-        direction = 1 if team_id == self.home_team_id else -1
-        self.ball_x = _clamp(self.ball_x + direction * self.rng.uniform(2, 10), 1, 104)
-        self.ball_y = _clamp(self.ball_y + self.rng.uniform(-8, 8), 1, 67)
+    def _opponent(self, team_id: str) -> str:
+        return self.away_team_id if team_id == self.home_team_id else self.home_team_id
+
+    def _direction(self, team_id: str) -> int:
+        return 1 if team_id == self.home_team_id else -1
+
+    def _goal_distance(self, team_id: str) -> float:
+        goal_x = PITCH_LENGTH if team_id == self.home_team_id else 0.0
+        return math.hypot(goal_x - self.ball_x, PITCH_WIDTH / 2 - self.ball_y)
+
+    def _in_attacking_box(self, team_id: str) -> bool:
+        depth = PITCH_LENGTH - self.ball_x if team_id == self.home_team_id else self.ball_x
+        return depth <= BOX_DEPTH and abs(self.ball_y - PITCH_WIDTH / 2) <= BOX_HALF_WIDTH
+
+    def _in_own_third(self, team_id: str) -> bool:
+        return self.ball_x < 35 if team_id == self.home_team_id else self.ball_x > 70
+
+    def _ball(self) -> tuple[float, float]:
+        return round(self.ball_x, 2), round(self.ball_y, 2)
+
+    def _near_ball(
+        self,
+        team_id: str,
+        locations: dict[str, tuple[float, float, float]],
+        count: int,
+    ) -> Player:
+        """Pick one of the `count` outfield players closest to the ball, so play stays local."""
+        outfield = sorted(
+            self.rosters[team_id][1:],
+            key=lambda p: math.hypot(
+                locations[p.id][0] - self.ball_x, locations[p.id][1] - self.ball_y
+            ),
+        )
+        return self.rng.choice(outfield[:count])
+
+    def _turnover(self, clock_s: int, player: Player, team_id: str, cause: str) -> MatchEvent:
+        """Hand the ball to the opponent and record it as an observed possession change."""
+        opponent_id = self._opponent(team_id)
+        self.possession_team_id = opponent_id
+        return self._event(
+            event_type="possession_change",
+            clock_s=clock_s,
+            team_id=team_id,
+            player=player,
+            position=self._ball(),
+            payload=PossessionChangePayload(from_team=team_id, to_team=opponent_id, cause=cause),
+        )
+
+    def _restart(
+        self,
+        clock_s: int,
+        team_id: str,
+        kind: str,
+        intent: str,
+        taker: Player,
+    ) -> MatchEvent:
+        self.possession_team_id = team_id
+        return self._event(
+            event_type="set_piece",
+            clock_s=clock_s,
+            team_id=team_id,
+            player=taker,
+            position=self._ball(),
+            payload=SetPiecePayload(
+                kind=kind,
+                intent=intent,
+                first_contact_x=round(self.ball_x, 2),
+                first_contact_y=round(self.ball_y, 2),
+            ),
+        )
+
+    def _corner(
+        self, clock_s: int, team_id: str, locations: dict[str, tuple[float, float, float]]
+    ) -> MatchEvent:
+        self.ball_x = PITCH_LENGTH - 0.5 if team_id == self.home_team_id else 0.5
+        self.ball_y = 0.5 if self.ball_y < PITCH_WIDTH / 2 else PITCH_WIDTH - 0.5
+        event = self._restart(
+            clock_s, team_id, "corner", "cross", self._near_ball(team_id, locations, 4)
+        )
+        # The delivery drops around the penalty spot.
+        self.ball_x = PITCH_LENGTH - 10 if team_id == self.home_team_id else 10.0
+        self.ball_y = PITCH_WIDTH / 2 + self.rng.uniform(-8, 8)
+        return event
+
+    # ---- Actions
+
+    def _shot(
+        self,
+        clock_s: int,
+        team_id: str,
+        shooter: Player,
+        locations: dict[str, tuple[float, float, float]],
+        *,
+        penalty: bool = False,
+    ) -> list[MatchEvent]:
+        """Shoot from the ball's position. Conversion depends on distance and is never emitted."""
+        opponent_id = self._opponent(team_id)
+        distance = self._goal_distance(team_id)
+        header = not penalty and distance < 14 and self.rng.random() < 0.25
+        if penalty:
+            goal_chance = PENALTY_CONVERSION
+        else:
+            goal_chance = _clamp(0.48 * math.exp(-distance / 7.5), 0.01, 0.5)
+            if header:
+                goal_chance *= 0.6
+        if self.rng.random() < goal_chance:
+            outcome = "goal"
+        else:
+            outcome = self.rng.choices(["saved", "off", "blocked"], weights=[35, 40, 25], k=1)[0]
+        speed = self.rng.uniform(30, 60) if header else self.rng.uniform(55, 120)
+        shot = self._event(
+            event_type="shot",
+            clock_s=clock_s,
+            team_id=team_id,
+            player=shooter,
+            position=self._ball(),
+            payload=ShotPayload(
+                speed_kmh=round(speed, 1),
+                outcome=outcome,
+                goal_y=round(self.rng.uniform(0.1, 7.22), 2),
+                goal_z=round(self.rng.uniform(0.1, 2.4), 2),
+                body_part="head" if header else "foot",
+            ),
+        )
+        events = [shot]
+        goal_line_x = PITCH_LENGTH - 3 if team_id == self.home_team_id else 3.0
+        if outcome == "goal":
+            # The conceding team kicks off from the centre spot.
+            self.possession_team_id = opponent_id
+            self.ball_x, self.ball_y = PITCH_LENGTH / 2, PITCH_WIDTH / 2
+        elif outcome == "saved":
+            self.ball_x, self.ball_y = goal_line_x, PITCH_WIDTH / 2
+            events.append(
+                self._event(
+                    event_type="gk_action",
+                    clock_s=clock_s,
+                    team_id=opponent_id,
+                    player=self.rosters[opponent_id][0],
+                    position=self._ball(),
+                    payload=GoalkeeperActionPayload(kind="save", shot_event_id=shot.event_id),
+                )
+            )
+            if self.rng.random() < 0.3:
+                events.append(self._corner(clock_s, team_id, locations))  # parried behind
+            else:
+                self.possession_team_id = opponent_id
+        elif outcome == "blocked" and self.rng.random() < 0.35:
+            events.append(self._corner(clock_s, team_id, locations))  # deflected behind
+        else:
+            # Off target (goal kick) or a block cleared by the defence.
+            self.ball_x, self.ball_y = goal_line_x, PITCH_WIDTH / 2
+            cause = "out" if outcome == "off" else "tackle"
+            events.append(self._turnover(clock_s, shooter, team_id, cause))
+        return events
+
+    def _pass(
+        self,
+        clock_s: int,
+        team_id: str,
+        passer: Player,
+        locations: dict[str, tuple[float, float, float]],
+    ) -> list[MatchEvent]:
+        direction = self._direction(team_id)
+        forward = self.rng.uniform(-12, 20)  # negative: back or square passes
+        raw_x = self.ball_x + direction * forward
+        raw_y = self.ball_y + self.rng.uniform(-16, 16)
+        out_side = not 0 <= raw_y <= PITCH_WIDTH
+        out_end = not 0 <= raw_x <= PITCH_LENGTH
+        end_x, end_y = _clamp(raw_x, 0, PITCH_LENGTH), _clamp(raw_y, 0, PITCH_WIDTH)
+        completion = 0.97 - 0.007 * max(0.0, forward)
+        if self._goal_distance(team_id) < 35:
+            completion -= 0.08
+        if out_side or out_end:
+            outcome = "out"
+        elif self.rng.random() < _clamp(completion, 0.45, 0.95):
+            outcome = "complete"
+        else:
+            outcome = "incomplete"
+        receiver = min(
+            self.rng.sample([p for p in self.rosters[team_id] if p.id != passer.id], 4),
+            key=lambda p: math.hypot(locations[p.id][0] - end_x, locations[p.id][1] - end_y),
+        )
+        height = self.rng.choices(["ground", "low", "high"], weights=[75, 15, 10], k=1)[0]
+        events = [
+            self._event(
+                event_type="pass",
+                clock_s=clock_s,
+                team_id=team_id,
+                player=passer,
+                position=self._ball(),
+                payload=PassPayload(
+                    receiver_id=receiver.id,
+                    end_x=round(end_x, 2),
+                    end_y=round(end_y, 2),
+                    speed_kmh=round(self.rng.uniform(18, 82), 1),
+                    outcome=outcome,
+                    height=height,
+                ),
+            )
+        ]
+        cleared_own_line = out_end and self._in_own_third(team_id)
+        self.ball_x, self.ball_y = end_x, end_y
+        opponent_id = self._opponent(team_id)
+        if outcome == "incomplete":
+            events.append(self._turnover(clock_s, passer, team_id, "interception"))
+        elif outcome == "out":
+            events.append(self._turnover(clock_s, passer, team_id, "out"))
+            if out_side:
+                taker = self._near_ball(opponent_id, locations, 3)
+                events.append(self._restart(clock_s, opponent_id, "throw", "pass", taker))
+            elif cleared_own_line:
+                events.append(self._corner(clock_s, opponent_id, locations))
+            # Otherwise over the opponent's goal line: a goal kick for the opponent.
+        return events
+
+    def _foul(
+        self,
+        clock_s: int,
+        team_id: str,
+        locations: dict[str, tuple[float, float, float]],
+    ) -> list[MatchEvent]:
+        """A defender fouls the team in possession; in the box it is a penalty."""
+        defending_id = self._opponent(team_id)
+        fouler = self._near_ball(defending_id, locations, 3)
+        reason = self.rng.choice(["late challenge", "holding", "trip"])
+        events = [
+            self._event(
+                event_type="foul",
+                clock_s=clock_s,
+                team_id=defending_id,
+                player=fouler,
+                position=self._ball(),
+                payload=FoulPayload(reason=reason),
+            )
+        ]
+        card_roll = self.rng.random()
+        if card_roll < 0.14:
+            events.append(
+                self._event(
+                    event_type="card",
+                    clock_s=clock_s,
+                    team_id=defending_id,
+                    player=fouler,
+                    position=self._ball(),
+                    payload=CardPayload(
+                        card="red" if card_roll < 0.004 else "yellow", reason=reason
+                    ),
+                )
+            )
+        taker = self._near_ball(team_id, locations, 2)
+        if self._in_attacking_box(team_id):
+            home = team_id == self.home_team_id
+            self.ball_x = PITCH_LENGTH - PENALTY_SPOT if home else PENALTY_SPOT
+            self.ball_y = PITCH_WIDTH / 2
+            events.append(self._restart(clock_s, team_id, "penalty", "shot", taker))
+            events.extend(self._shot(clock_s, team_id, taker, locations, penalty=True))
+            return events
+        intent = (
+            "shot" if self._goal_distance(team_id) < 30 and self.rng.random() < 0.35 else "pass"
+        )
+        events.append(self._restart(clock_s, team_id, "free_kick", intent, taker))
+        if intent == "shot":
+            events.extend(self._shot(clock_s, team_id, taker, locations))
+        return events
 
     def _action_events(
         self,
@@ -165,209 +437,54 @@ class SeededMatch:
         locations: dict[str, tuple[float, float, float]],
     ) -> list[MatchEvent]:
         team_id = self.possession_team_id
-        opponent_id = self.away_team_id if team_id == self.home_team_id else self.home_team_id
-        roster = self.rosters[team_id]
-        opponents = self.rosters[opponent_id]
-        actor = self.rng.choice(roster[1:])
-        actor_position = self._actor_location(actor, locations)
-        direction = 1 if team_id == self.home_team_id else -1
-        is_attacking_third = self.ball_x >= 76 if direction == 1 else self.ball_x <= 29
-        events: list[MatchEvent] = []
+        opponent_id = self._opponent(team_id)
+        actor = self._near_ball(team_id, locations, 3)
+        distance = self._goal_distance(team_id)
+        shot_chance = 0.0 if distance > SHOT_RANGE else 0.42 * (1 - distance / SHOT_RANGE) ** 1.6
+        if self.rng.random() < shot_chance:
+            return self._shot(clock_s, team_id, actor, locations)
 
-        if is_attacking_third and self.rng.random() < 0.18:
-            distance_to_goal = self.ball_x if direction < 0 else 105 - self.ball_x
-            xg = round(
-                _clamp(0.42 - distance_to_goal * 0.004 + self.rng.uniform(-0.08, 0.08), 0.02, 0.5),
-                3,
-            )
-            outcome = (
-                "goal"
-                if self.rng.random() < xg * 0.65
-                else self.rng.choices(["saved", "off", "blocked"], weights=[0.42, 0.38, 0.20], k=1)[
-                    0
-                ]
-            )
-            shot = self._event(
-                event_type="shot",
-                clock_s=clock_s,
-                team_id=team_id,
-                player=actor,
-                position=actor_position,
-                payload=ShotPayload(
-                    speed_kmh=round(self.rng.uniform(48, 122), 1),
-                    outcome=outcome,
-                    goal_y=round(self.rng.uniform(0.1, 7.22), 2),
-                    goal_z=round(self.rng.uniform(0.1, 2.4), 2),
-                    xg=xg,
-                    body_part=self.rng.choice(["foot", "head", "other"]),
-                ),
-            )
-            events.append(shot)
-            if outcome != "goal":
-                goalkeeper = opponents[0]
-                events.append(
-                    self._event(
-                        event_type="gk_action",
-                        clock_s=clock_s,
-                        team_id=opponent_id,
-                        player=goalkeeper,
-                        position=self._actor_location(goalkeeper, locations),
-                        payload={
-                            "kind": self.rng.choice(["save", "claim", "punch"]),
-                            "shot_event_id": shot.event_id,
-                        },
-                    )
-                )
-                self.possession_team_id = opponent_id
-            self.ball_x, self.ball_y = 52.5, 34.0
-            return events
-
+        # Defenders rarely risk a foul inside their own box: that is a penalty.
+        foul_weight = 0.25 if self._in_attacking_box(team_id) else 4
         action = self.rng.choices(
-            ["pass", "duel", "pressure", "turnover", "foul", "set_piece"],
-            weights=[72, 8, 8, 8, 3, 1],
-            k=1,
+            ["pass", "duel", "pressure", "foul"], weights=[78, 10, 8, foul_weight]
         )[0]
         if action == "pass":
-            receiver = self.rng.choice([player for player in roster if player.id != actor.id])
-            outcome = self.rng.choices(["complete", "incomplete", "out"], weights=[86, 10, 4], k=1)[
-                0
-            ]
-            end_x = _clamp(self.ball_x + direction * self.rng.uniform(1, 16), 0, 105)
-            end_y = _clamp(self.ball_y + self.rng.uniform(-12, 12), 0, 68)
-            events.append(
-                self._event(
-                    event_type="pass",
-                    clock_s=clock_s,
-                    team_id=team_id,
-                    player=actor,
-                    position=actor_position,
-                    payload={
-                        "receiver_id": receiver.id,
-                        "end_x": round(end_x, 2),
-                        "end_y": round(end_y, 2),
-                        "speed_kmh": round(self.rng.uniform(18, 82), 1),
-                        "outcome": outcome,
-                        "height": self.rng.choices(
-                            ["ground", "low", "high"], weights=[75, 15, 10], k=1
-                        )[0],
-                        "difficulty": round(self.rng.uniform(0.05, 0.95), 2),
-                        "inside_opp_shape": self.ball_x > 60
-                        if team_id == self.home_team_id
-                        else self.ball_x < 45,
-                    },
-                )
-            )
-            if outcome == "complete":
-                self.ball_x, self.ball_y = end_x, end_y
-            else:
-                self.possession_team_id = opponent_id
-                self.ball_x, self.ball_y = end_x, end_y
-        elif action == "duel":
-            opponent = self.rng.choice(opponents[1:])
-            won = self.rng.random() < 0.52
-            events.append(
-                self._event(
-                    event_type="duel",
-                    clock_s=clock_s,
-                    team_id=team_id,
-                    player=actor,
-                    position=actor_position,
-                    payload={"opponent_id": opponent.id, "kind": "1v1", "won": won},
-                )
-            )
-            if not won:
-                self.possession_team_id = opponent_id
-        elif action == "pressure":
-            target = self.rng.choice(opponents[1:])
-            events.append(
+            return self._pass(clock_s, team_id, actor, locations)
+        if action == "foul":
+            return self._foul(clock_s, team_id, locations)
+        opponent = self._near_ball(opponent_id, locations, 3)
+        if action == "pressure":
+            return [
                 self._event(
                     event_type="pressure",
                     clock_s=clock_s,
-                    team_id=team_id,
-                    player=actor,
-                    position=actor_position,
-                    payload={
-                        "target_id": target.id,
-                        "duration_s": round(self.rng.uniform(1, 8), 1),
-                    },
+                    team_id=opponent_id,
+                    player=opponent,
+                    position=self._ball(),
+                    payload=PressurePayload(
+                        target_id=actor.id, duration_s=round(self.rng.uniform(1, 8), 1)
+                    ),
                 )
+            ]
+        won = self.rng.random() < 0.55
+        events = [
+            self._event(
+                event_type="duel",
+                clock_s=clock_s,
+                team_id=team_id,
+                player=actor,
+                position=self._ball(),
+                payload=DuelPayload(opponent_id=opponent.id, kind="1v1", won=won),
             )
-        elif action == "turnover":
-            cause = self.rng.choice(["tackle", "interception", "out", "foul"])
-            events.append(
-                self._event(
-                    event_type="possession_change",
-                    clock_s=clock_s,
-                    team_id=team_id,
-                    player=actor,
-                    position=actor_position,
-                    payload={"from_team": team_id, "to_team": opponent_id, "cause": cause},
-                )
+        ]
+        if won:
+            # Beating a man carries the ball forward a few metres.
+            self.ball_x = _clamp(
+                self.ball_x + self._direction(team_id) * self.rng.uniform(0, 6), 0, PITCH_LENGTH
             )
-            self.possession_team_id = opponent_id
-            if cause == "out":
-                events.append(
-                    self._event(
-                        event_type="set_piece",
-                        clock_s=clock_s,
-                        team_id=opponent_id,
-                        player=None,
-                        position=(self.ball_x, self.ball_y),
-                        payload={
-                            "kind": self.rng.choice(["corner", "throw"]),
-                            "intent": self.rng.choice(["pass", "cross"]),
-                            "first_contact_x": round(self.ball_x, 2),
-                            "first_contact_y": round(self.ball_y, 2),
-                            "first_contact_player_id": None,
-                        },
-                    )
-                )
-        elif action == "foul":
-            events.append(
-                self._event(
-                    event_type="foul",
-                    clock_s=clock_s,
-                    team_id=team_id,
-                    player=actor,
-                    position=actor_position,
-                    payload={"reason": self.rng.choice(["late challenge", "holding", "trip"])},
-                )
-            )
-            if self.rng.random() < 0.08:
-                events.append(
-                    self._event(
-                        event_type="card",
-                        clock_s=clock_s,
-                        team_id=team_id,
-                        player=actor,
-                        position=actor_position,
-                        payload={
-                            "card": self.rng.choices(["yellow", "red"], weights=[97, 3], k=1)[0],
-                            "reason": "unsporting conduct",
-                        },
-                    )
-                )
-            self.possession_team_id = opponent_id
         else:
-            kind = "corner" if self.rng.random() < 0.6 else "free_kick"
-            events.append(
-                self._event(
-                    event_type="set_piece",
-                    clock_s=clock_s,
-                    team_id=team_id,
-                    player=actor,
-                    position=actor_position,
-                    payload={
-                        "kind": kind,
-                        "intent": self.rng.choice(["pass", "cross", "shot"]),
-                        "first_contact_x": round(self.ball_x, 2),
-                        "first_contact_y": round(self.ball_y, 2),
-                        "first_contact_player_id": self.rng.choice(roster).id,
-                    },
-                )
-            )
-
-        self._advance_ball(self.possession_team_id)
+            events.append(self._turnover(clock_s, actor, team_id, "tackle"))
         return events
 
     def records(self) -> Iterator[MatchEvent | PositionSnapshot]:
@@ -385,6 +502,8 @@ class SeededMatch:
                     payload=PeriodPayload(action="end"),
                 )
             if clock_s == self.halfway_s + 1:
+                self.possession_team_id = self.away_team_id
+                self.ball_x, self.ball_y = PITCH_LENGTH / 2, PITCH_WIDTH / 2
                 yield self._event(
                     event_type="period",
                     clock_s=clock_s,

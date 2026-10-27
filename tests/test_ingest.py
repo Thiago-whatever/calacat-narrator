@@ -31,8 +31,6 @@ def event_body() -> bytes:
                 "speed_kmh": 63,
                 "outcome": "complete",
                 "height": "ground",
-                "difficulty": 0.4,
-                "inside_opp_shape": True,
             },
         }
     ).encode()

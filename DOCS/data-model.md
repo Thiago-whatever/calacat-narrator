@@ -25,8 +25,8 @@ and player catalog packaged in `src/calacat_narrator/data/`.
 ## Event types (MVP)
 | type | payload |
 |---|---|
-| `pass` | `receiver_id, end_x, end_y, speed_kmh, outcome (complete/incomplete/out), height, difficulty (0–1), inside_opp_shape` |
-| `shot` | `speed_kmh, outcome (goal/saved/off/blocked), goal_y, goal_z, xg, body_part` |
+| `pass` | `receiver_id, end_x, end_y, speed_kmh, outcome (complete/incomplete/out), height` |
+| `shot` | `speed_kmh, outcome (goal/saved/off/blocked), goal_y, goal_z, body_part` |
 | `duel` | `opponent_id, kind (tackle/1v1/aerial), won` |
 | `pressure` | `target_id, duration_s` |
 | `possession_change` | `from_team, to_team, cause (tackle/interception/out/foul)` |
@@ -50,6 +50,19 @@ Every 1 s, a `positions` message carries `{match_clock_s, players:[{id,x,y,speed
 - An optional **scenario director** schedules story beats (early red card, late comeback).
 - `sim.baseline` runs about 50 matches and writes expected-at-minute distributions per metric, used by the signal gate.
 
+Events are **facts only** (ADR-037): who, where, when, outcome, speed and body part.
+Derived opinions such as xG, pass difficulty or "inside the opponent's shape" are never
+emitted; the simulator uses internal probabilities to decide outcomes but keeps them to
+itself. Every on-ball event is placed at the ball. Passes can go backwards; incomplete
+passes and passes out of play hand the ball to the opponent with a `possession_change`
+(`interception`, `out` or `tackle`), followed by the opponent's throw-in or, for a
+clearance over a team's own goal line, a corner. Shot chance and conversion depend on
+distance to goal. Fouls are committed by the defending team: in the box they become a
+`set_piece` of kind `penalty` followed by the shot. A `gk_action` save follows only
+`saved` shots, and the conceding team kicks off after a goal. Over 20 seeds the
+simulator averages about 2.8 goals, 27 shots and 300+ possession changes per match
+(`tests/test_simulator.py` checks the ranges).
+
 Run the deterministic simulator with `python -m calacat_narrator.simulator
 --seed 7 --speed 10 --output match.jsonl`. The JSON Lines file contains event and
 1 Hz position records, each with a `record_type` discriminator. Repeating a seed
@@ -62,7 +75,7 @@ file because `/ingest` accepts event envelopes.
 { "signal_id": "...", "match_id": "m-0007", "kind": "goal", "match_clock_s": 4020,
   "entity": {"team_id": "t-home"}, "value": 2,
   "event_context": {"event_type": "shot", "event_id": "evt-0042", "period": 2,
-    "outcome": "goal", "speed_kmh": 104, "xg": 0.74, "body_part": "foot"},
+    "outcome": "goal", "speed_kmh": 104, "body_part": "foot"},
   "evidence_event_ids": ["evt-0042"], "tier": 1 }
 ```
 Gate rules live in `src/calacat_narrator/data/signals.yaml` (ADR-013): `min_sample`,
@@ -72,13 +85,10 @@ Threshold signals and critical signals are published to the Service Bus `signals
 topic with deterministic message IDs and evidence event IDs.
 
 Goal and penalty signals also carry a bounded, typed `event_context` copied from the
-single evidence event: shot outcome, xG, speed, body part, period, or penalty intent.
+single evidence event: shot outcome, speed, body part, period, or penalty intent.
 The Goal & Shot specialist can use these values for its narrative; the application
-adds verified `xg` and `shot_speed_kmh` to candidate metrics for goal evidence.
-Passing signals may carry the triggering pass's outcome, difficulty, and whether its
-reception was inside the opponent's shape. The Build-up & Passing specialist can use
-those details only for that evidenced pass; the application adds `pass_difficulty` and
-`reception_inside_opponent_shape` (0 or 1) to candidate metrics. Event context IDs must
+adds the verified `shot_speed_kmh` to candidate metrics for goal evidence. Passing
+signals carry the triggering pass's outcome. Event context IDs must
 be included in signal evidence, and signal/candidate evidence IDs remain application-owned.
 
 The Interpreter consumes Event Hubs in match-keyed partitions and stores one Cosmos DB
@@ -109,7 +119,7 @@ detection on the `candidates` topic.
   "match_id": "m-0007",
   "headline": "A second goal changes the balance",
   "why_it_matters": "The home side has now scored twice.",
-  "metrics": { "goal": 2, "shot_speed_kmh": 104, "xg": 0.74 },
+  "metrics": { "goal": 2, "shot_speed_kmh": 104 },
   "evidence_event_ids": ["evt-0042"],
   "entity_ids": ["t-home"],
   "topic": "goal",

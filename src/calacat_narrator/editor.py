@@ -251,11 +251,10 @@ def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None 
     metrics: dict[str, int | float] = {signal.kind: signal.value}
     if isinstance(signal.event_context, ShotEventContext):
         metrics["shot_speed_kmh"] = signal.event_context.speed_kmh
-        metrics["xg"] = signal.event_context.xg
         headline = "Goal - confirmed event" if signal.kind == "goal" else "Shot update"
         body = (
             f"A goal was recorded at {clock}; verified shot speed is "
-            f"{signal.event_context.speed_kmh:g} km/h and xG is {signal.event_context.xg:g}."
+            f"{signal.event_context.speed_kmh:g} km/h."
             if signal.kind == "goal"
             else f"A shot update was recorded at {clock}; verified shot speed is "
             f"{signal.event_context.speed_kmh:g} km/h."
@@ -267,10 +266,6 @@ def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None 
         headline = "Red card - event recorded"
         body = f"A red card was recorded at {clock}; this is the team's red card number {signal.value}."
     elif isinstance(signal.event_context, PassEventContext):
-        metrics["pass_difficulty"] = signal.event_context.difficulty
-        metrics["reception_inside_opponent_shape"] = int(
-            signal.event_context.inside_opp_shape
-        )
         headline = f"{signal.kind.replace('_', ' ').title()} - verified update"
         body = f"A {signal.kind.replace('_', ' ')} update was recorded at {clock}."
     else:
