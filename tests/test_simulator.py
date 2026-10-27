@@ -165,3 +165,48 @@ def test_threshold_signals_fire_beyond_goals() -> None:
                 state, _ = apply_event(state, record)
                 kinds.update(signal.kind for signal in evaluate_signals(state, record, rules))
     assert {"goal", "shot_volume", "pass_streak"} <= kinds
+
+
+def _red_cards(events: list[MatchEvent]) -> list[MatchEvent]:
+    return [event for event in events if event.type == "card" and event.payload.card == "red"]
+
+
+def test_sent_off_players_take_no_further_part(full_matches) -> None:
+    for events in full_matches.values():
+        sent_off: set[str] = set()
+        yellows: dict[str, int] = {}
+        for event in events:
+            involved = {event.player_id}
+            if event.type == "pass":
+                involved.add(event.payload.receiver_id)
+            assert sent_off.isdisjoint(involved), f"sent-off player acted: {event.event_id}"
+            if event.type == "card" and event.payload.card == "yellow":
+                yellows[event.player_id] = yellows.get(event.player_id, 0) + 1
+                # A second booking is emitted as a red, never as a second yellow.
+                assert yellows[event.player_id] == 1, event.event_id
+            elif event.type == "card":
+                sent_off.add(event.player_id)
+
+
+def test_second_yellows_become_reds_and_cards_stay_realistic(full_matches) -> None:
+    reds = [card for events in full_matches.values() for card in _red_cards(events)]
+    yellows = sum(_count(events, "card", card="yellow") for events in full_matches.values())
+
+    assert any(card.payload.reason.startswith("second yellow") for card in reds)
+    assert 2 <= yellows / len(full_matches) <= 5
+    assert len(reds) / len(full_matches) <= 0.5
+
+
+def test_sent_off_player_leaves_the_position_stream(full_matches) -> None:
+    seed, red = next(
+        (seed, _red_cards(events)[0]) for seed, events in full_matches.items() if _red_cards(events)
+    )
+    snapshots = [
+        record
+        for record in simulate_match(seed)
+        if isinstance(record, PositionSnapshot) and record.match_clock_s > red.match_clock_s
+    ]
+
+    assert snapshots
+    assert all(red.player_id not in {p.id for p in snapshot.players} for snapshot in snapshots)
+    assert all(len(snapshot.players) == 21 for snapshot in snapshots[:5])

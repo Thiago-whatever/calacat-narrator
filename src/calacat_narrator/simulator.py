@@ -78,6 +78,9 @@ class SeededMatch:
         self.rosters = {
             team.id: [self.players[player_id] for player_id in team.squad] for team in catalog.teams
         }
+        # Sent-off players leave the pitch: no more actions, receptions or positions.
+        self.sent_off: set[str] = set()
+        self.yellow_cards: dict[str, int] = {}
         self.possession_team_id = self.home_team_id
         self.ball_x = 52.5
         self.ball_y = 34.0
@@ -123,6 +126,8 @@ class SeededMatch:
         for team_id, roster in self.rosters.items():
             is_home = team_id == self.home_team_id
             for index, player in enumerate(roster):
+                if player.id in self.sent_off:
+                    continue
                 home_x, base_y = HOME_FORMATION[index]
                 base_x = home_x if is_home else 105 - home_x
                 base_y = base_y if is_home else 68 - base_y
@@ -152,14 +157,10 @@ class SeededMatch:
             match_id=self.match_id,
             period=self._period(clock_s),
             match_clock_s=clock_s,
+            # Only players still on the pitch (sent-off players are absent from `locations`).
             players=[
-                PlayerPosition(
-                    id=player.id,
-                    x=locations[player.id][0],
-                    y=locations[player.id][1],
-                    speed_kmh=locations[player.id][2],
-                )
-                for player in self.catalog.players
+                PlayerPosition(id=player_id, x=x, y=y, speed_kmh=speed_kmh)
+                for player_id, (x, y, speed_kmh) in locations.items()
             ],
             ball={"x": round(self.ball_x, 2), "y": round(self.ball_y, 2), "z": 0},
         )
@@ -194,7 +195,7 @@ class SeededMatch:
     ) -> Player:
         """Pick one of the `count` outfield players closest to the ball, so play stays local."""
         outfield = sorted(
-            self.rosters[team_id][1:],
+            (p for p in self.rosters[team_id][1:] if p.id not in self.sent_off),
             key=lambda p: math.hypot(
                 locations[p.id][0] - self.ball_x, locations[p.id][1] - self.ball_y
             ),
@@ -344,8 +345,11 @@ class SeededMatch:
             outcome = "complete"
         else:
             outcome = "incomplete"
+        teammates = [
+            p for p in self.rosters[team_id] if p.id != passer.id and p.id not in self.sent_off
+        ]
         receiver = min(
-            self.rng.sample([p for p in self.rosters[team_id] if p.id != passer.id], 4),
+            self.rng.sample(teammates, min(4, len(teammates))),
             key=lambda p: math.hypot(locations[p.id][0] - end_x, locations[p.id][1] - end_y),
         )
         height = self.rng.choices(["ground", "low", "high"], weights=[75, 15, 10], k=1)[0]
@@ -402,7 +406,17 @@ class SeededMatch:
             )
         ]
         card_roll = self.rng.random()
-        if card_roll < 0.14:
+        # ~4 yellows a match; a booked player (and the referee) is more careful, which keeps
+        # second yellows near the real ~0.1 per match.
+        card_rate = 0.09 if fouler.id not in self.yellow_cards else 0.03
+        if card_roll < card_rate:
+            card = "red" if card_roll < 0.004 else "yellow"
+            if card == "yellow":
+                self.yellow_cards[fouler.id] = self.yellow_cards.get(fouler.id, 0) + 1
+                if self.yellow_cards[fouler.id] == 2:
+                    card, reason = "red", f"second yellow card, {reason}"
+            if card == "red":
+                self.sent_off.add(fouler.id)
             events.append(
                 self._event(
                     event_type="card",
@@ -410,9 +424,7 @@ class SeededMatch:
                     team_id=defending_id,
                     player=fouler,
                     position=self._ball(),
-                    payload=CardPayload(
-                        card="red" if card_roll < 0.004 else "yellow", reason=reason
-                    ),
+                    payload=CardPayload(card=card, reason=reason),
                 )
             )
         taker = self._near_ball(team_id, locations, 2)
