@@ -83,6 +83,12 @@
   "shortcuts": "J / K move · Enter go live · Esc cancel or pull",
   "feedConnecting": "Connecting to the live feed…",
   "feedError": "Live feed unavailable. Retrying…",
+  "startMatch": "Start a match",
+  "startingMatch": "Starting a match…",
+  "matchStarted": "Match started. The first cards arrive within a minute.",
+  "matchesBusy": "Two matches are already running. Try again in {min} min.",
+  "matchesDaily": "Today's match limit is reached. Try again tomorrow.",
+  "startFailed": "Couldn't start a match. Try again.",
   "topics": {
     "goal": "Goal",
     "passing": "Build-up",

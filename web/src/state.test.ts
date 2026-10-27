@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mergeCards, parseLiveCard, toFeedCard } from './data/live'
-import { minutes } from './i18n'
+import { readStartResponse, startMessage } from './data/kickoff'
+import { minutes, STRINGS } from './i18n'
 import { COUNTDOWN_MS, initialState, reducer, type Action, type ConsoleState } from './state'
 import type { FeedCard } from './types'
 
@@ -115,5 +116,23 @@ describe('on-air minute', () => {
     [5400, '90’'],
   ])('%i s is %s', (seconds, minute) => {
     expect(minutes(seconds)).toBe(minute)
+  })
+})
+
+describe('start a match (C16)', () => {
+  it('follows a started match and reads both caps', () => {
+    expect(readStartResponse(202, { match_id: 'm-seed-42', speed: 10 })).toEqual({ status: 'started', matchId: 'm-seed-42' })
+    expect(readStartResponse(429, { error: 'busy', retry_after_s: 301 })).toEqual({ status: 'busy', retryMin: 6 })
+    expect(readStartResponse(429, { error: 'daily_cap', retry_after_s: 9000 })).toEqual({ status: 'daily_cap' })
+  })
+
+  it('treats a bad match ID or any other status as an error', () => {
+    expect(readStartResponse(202, { match_id: '../x' }).status).toBe('error')
+    expect(readStartResponse(503, null).status).toBe('error')
+  })
+
+  it('shows the busy message with minutes', () => {
+    expect(startMessage(STRINGS.en, { status: 'busy', retryMin: 6 })).toBe('Two matches are already running. Try again in 6 min.')
+    expect(startMessage(STRINGS.es, { status: 'idle' })).toBe('')
   })
 })

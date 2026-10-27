@@ -70,6 +70,21 @@ and duration produces identical output; `--speed` affects only pacing when posti
 event records to an optional `--ingest-url`. Position samples remain in the output
 file because `/ingest` accepts event envelopes.
 
+### Judge-started matches (C16, ADR-044)
+
+`POST /api/matches` starts a match on the server. The body is optional: `{"speed": 10}`
+(an integer from 5 to 20; unknown fields are rejected), and the console sends none. The server
+picks the seed, so the response is `202 {"match_id": "m-seed-<seed>", "speed": 10, "status":
+"starting"}`. At most 2 matches run at once and 20 start per UTC day; otherwise the response is
+`429 {"error": "busy" | "daily_cap", "retry_after_s": n}` with a matching `Retry-After`
+header. An invalid body returns `400`, a body that isn't JSON `415`, and a Cosmos failure `503`.
+
+The limits are documents in the `match-state` container under the partition `kickoffs`:
+`slot-0` and `slot-1` hold `{running, busy_until}`, and `day-YYYY-MM-DD` holds `{count}`. All
+writes are ETag-conditional. The accepted request goes on the `match-kickoffs` storage queue;
+the queue-triggered `run_kickoff` function plays that seed into Event Hubs at its speed, like
+the CLI's `--ingest-url` mode, and the pipeline narrates it like any other match.
+
 ## Signals (Interpreter → Service Bus)
 ```json
 { "signal_id": "...", "match_id": "m-0007", "kind": "goal", "match_clock_s": 4020,

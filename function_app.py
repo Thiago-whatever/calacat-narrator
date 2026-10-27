@@ -19,6 +19,15 @@ from calacat_narrator.cosmos import (
 from calacat_narrator.eventhub import publish_event
 from calacat_narrator.ingest import MAX_INGEST_BODY_BYTES, parse_event
 from calacat_narrator.interpreter import MatchState, update_match_state
+from calacat_narrator.kickoff import (
+    KICKOFF_QUEUE,
+    KickoffLimit,
+    KickoffMessage,
+    claim_kickoff,
+    new_kickoff,
+    parse_kickoff,
+    run_match,
+)
 from calacat_narrator.schemas import MatchEvent
 from calacat_narrator.servicebus import publish_signals
 from calacat_narrator.signals import evaluate_signals, load_signal_rules
@@ -144,3 +153,46 @@ def cards(req: func.HttpRequest) -> func.HttpResponse:
         200,
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.route(route="matches", methods=["POST"])
+@app.queue_output(arg_name="kickoff", queue_name=KICKOFF_QUEUE, connection="AzureWebJobsStorage")
+def start_match(req: func.HttpRequest, kickoff: func.Out[str]) -> func.HttpResponse:
+    """Start a seeded match on the server (ADR-016, ADR-044); at most 2 run at once."""
+    body = req.get_body()
+    content_type = req.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if body.strip() and content_type != "application/json":
+        return _json_response({"error": "content_type_must_be_application_json"}, 415)
+    try:
+        message = new_kickoff(parse_kickoff(body))
+    except ValueError:
+        return _json_response({"error": "invalid_request"}, 400)
+    try:
+        claim_kickoff(get_match_container(), message)
+    except KickoffLimit as limit:
+        return _json_response(
+            {"error": limit.reason, "retry_after_s": limit.retry_after_s},
+            429,
+            headers={"Retry-After": str(limit.retry_after_s), "Cache-Control": "no-store"},
+        )
+    except (AzureError, RuntimeError):
+        logger.exception("Failed to claim a match slot")
+        return _json_response({"error": "cosmos_unavailable"}, 503)
+    kickoff.set(message.model_dump_json())
+    return _json_response(
+        {"match_id": message.match_id, "speed": message.speed, "status": "starting"},
+        202,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.queue_trigger(arg_name="message", queue_name=KICKOFF_QUEUE, connection="AzureWebJobsStorage")
+def run_kickoff(message: func.QueueMessage) -> None:
+    """Play the match into Event Hubs at its speed; the pipeline narrates it like any other."""
+    try:
+        kickoff = KickoffMessage.model_validate_json(message.get_body())
+    except ValidationError:
+        logger.error("Discarding invalid kickoff message %s", message.id)
+        return
+    published = run_match(kickoff, publish_event)
+    logger.info("Match %s finished: %d events", kickoff.match_id, published)
