@@ -13,7 +13,8 @@ npm run build    # static site in dist/
 ## Modes
 
 - **Demo** (default): the fictional fixtures from the design prototype, driven by **Start match**.
-- **Live**: build with `VITE_API_BASE_URL=/api` (see `.env.example`) and open `/?match=m-0007`.
+- **Live**: build with `VITE_API_BASE_URL=https://<function-app-host>/api` (see `.env.example`) and open
+  `/calacat-narrator/?match=m-seed-7`.
   The console calls `GET /api/negotiate`, connects to the receive-only Web PubSub URL, then loads `GET /api/cards`
   (unexpired cards plus the interpreter's score) on every connect and every 30 s. Cards are deduplicated by `card_id`,
   and expired ones leave the feed and can't be sent to air.
@@ -23,12 +24,34 @@ npm run build    # static site in dist/
   The dev server forwards `/api/*` to the Function App, so no CORS is needed. Then play a match into Azure with the
   simulator (`--ingest-url https://<function-app-host>/api/ingest`) using the same match ID (`m-seed-<seed>`).
 
-## Hosting
+## Hosting: GitHub Pages, receive-only demo (ADR-043)
 
-Static Web Apps with the Function App as a linked backend (ADR-036), so `/api/*` is same-origin.
-`public/staticwebapp.config.json` restricts the whole console (and `/api/*` through it) to the `reporter` role,
-redirects anonymous users to sign in, and sets a CSP that allows only `'self'` and `wss://*.webpubsub.azure.com`.
-Fonts are bundled from `@fontsource`, so the page makes no third-party requests.
+> **This is a demo build, not a production broadcast tool.** There is no sign-in, every visitor sees
+> the same shared feed, and nothing a visitor does is sent anywhere.
+
+- **Where:** `https://thiago-whatever.github.io/calacat-narrator/`. Vite builds with `base: '/calacat-narrator/'`.
+- **Receive-only:** the console only calls `GET /cards` and `GET /negotiate`, then listens on the Web PubSub
+  socket without sending. Selecting, editing, previewing and "going live" with a card stay in that browser's
+  memory, reset on refresh, and are invisible to other viewers. The overlay is rendered inside the console page;
+  an external program such as OBS can't see a browser-local go-live.
+- **Live data:** set the repository **variable** (never a secret) `VITE_API_BASE_URL` to the Function App's
+  `/api` URL. The Function App's CORS allows only `https://thiago-whatever.github.io` (`webConsoleOrigin` in
+  `infra/main.bicep`). Without the variable the page runs the fictional demo match.
+- **Security headers:** Pages can't send headers, so a build-time `<meta>` Content Security Policy allows only
+  `'self'`, the Function origin and `wss://*.webpubsub.azure.com` (plus inline styles for MUI). Fonts are bundled
+  from `@fontsource`, so the page makes no third-party requests.
+
+## Deploy (GitHub Pages)
+
+`.github/workflows/pages.yml` lints, tests, builds and publishes `web/` on every push to `main` that touches it
+(or on demand from the Actions tab), with `actions/upload-pages-artifact` and `actions/deploy-pages`.
+
+One-time setup:
+
+1. The repository must be public (GitHub Pages on a free plan; the hackathon rules also require it).
+2. **Settings → Pages → Source: GitHub Actions.**
+3. Optional live mode: **Settings → Secrets and variables → Actions → Variables**, add `VITE_API_BASE_URL`,
+   then run `azd provision` so the Function App gets the CORS rule.
 
 ## Structure
 
