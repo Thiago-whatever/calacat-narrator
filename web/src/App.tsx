@@ -18,7 +18,7 @@ import { onAirState, openOnAirChannel } from './data/onAirChannel'
 import { useDemoSource, type DemoRun } from './data/useDemoSource'
 import { useFeedDrag, useNow, usePrefs } from './hooks'
 import { minutes, STRINGS, topicLabel } from './i18n'
-import { clamp, COUNTDOWN_MS, initialState, reducer, SIZES, type AirCard } from './state'
+import { clamp, COUNTDOWN_MS, initialState, reducer, SIZES } from './state'
 import { AppThemeProvider } from './theme/AppThemeProvider'
 import type { ThemePrefs } from './theme/theme'
 import type { CardText, FeedCard, Lang, Source } from './types'
@@ -158,11 +158,10 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
   const channel = useRef<ReturnType<typeof openOnAirChannel> | null>(null)
   const latestState = useRef(() => onAirState(outputs, s.onAir, teams))
   useEffect(() => {
-    // The output is always in English: the reporter's English edit if there is one, else the English card.
-    const english = (air: AirCard): CardText => s.edits[`${air.id}:en`] ?? air.card.text.en
-    latestState.current = () => onAirState(outputs, s.onAir, teams, english)
+    // Only go-live, replace and pull change the output: edits after send never reach viewers.
+    latestState.current = () => onAirState(outputs, s.onAir, teams)
     channel.current?.post(latestState.current())
-  }, [outputs, s.onAir, teams, s.edits])
+  }, [outputs, s.onAir, teams])
   useEffect(() => {
     const open = openOnAirChannel((message) => {
       if (message.type === 'hello') open.post(latestState.current())
@@ -241,17 +240,19 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
   const countdown = s.pending ? clamp(Math.ceil((s.pending.until - now) / 1000), 1, COUNTDOWN_MS / 1000) : 0
   const airSecs = air ? Math.max(0, Math.floor((now - air.since) / 1000)) : 0
 
+  // Outside English, say what viewers actually get, since the output is English only.
+  const viewersGet = (c: CardText & { en: CardText }) => (lang === 'en' ? c.h : `${t.viewersGet} “${c.en.h}”`)
   let mode: BarMode = 'idle'
   let title = `${t.offAir} · ${output.name}`
   let sub = t.selectHint
   if (s.pending) {
     mode = 'pending'
     title = `${t.goingLive} ${output.name} · ${countdown}${t.secs}`
-    sub = s.pending.h
+    sub = viewersGet(s.pending)
   } else if (air) {
     mode = 'air'
     title = `${t.onAir} · ${output.name} · ${Math.floor(airSecs / 60)}:${String(airSecs % 60).padStart(2, '0')}`
-    sub = selected ? t.nextReady : air.h
+    sub = selected ? t.nextReady : viewersGet(air)
   } else if (selected) {
     mode = 'ready'
     title = t.ready
@@ -263,8 +264,10 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
 
   // ---- Actions (event handlers only; never called during render)
   const send = () => {
+    // The output is English only: freeze the reporter's English edit (or the English card) now.
+    const en = selected && (s.edits[`${selected.id}:en`] ?? selected.text.en)
     // oxlint-disable-next-line react/purity
-    if (selected) dispatch({ type: 'send', card: selected, text: textOf(selected), now: Date.now(), message: t.sendMsg })
+    if (selected && en) dispatch({ type: 'send', card: selected, text: textOf(selected), en, now: Date.now(), message: t.sendMsg })
   }
   const pull = (out?: string) => {
     const target = outputs.find((o) => o.id === (out ?? s.output))

@@ -25,19 +25,14 @@ export type OnAirMessage =
 
 const CHANNEL = 'calacat-on-air'
 
-/** `textOf` picks the text viewers get; by default the text the card went live with. */
-export function onAirState(
-  outputs: OverlayOutput[],
-  onAir: Record<string, AirCard | null>,
-  teams: Record<string, Team>,
-  textOf: (air: AirCard) => CardText = (air) => ({ h: air.h, b: air.b }),
-): OnAirMessage {
+/** Viewers get the English text frozen when the card was sent, never a later edit. */
+export function onAirState(outputs: OverlayOutput[], onAir: Record<string, AirCard | null>, teams: Record<string, Team>): OnAirMessage {
   const cards: Record<string, OverlayCard | null> = {}
   for (const { id } of outputs) {
     const air = onAir[id]
     const team = air && teams[air.card.team]
     cards[id] = air && team
-      ? { id: air.id, card: air.card, team, geo: { x: air.x, y: air.y, width: air.width, height: air.height }, text: textOf(air) }
+      ? { id: air.id, card: air.card, team, geo: { x: air.x, y: air.y, width: air.width, height: air.height }, text: air.en }
       : null
   }
   return { type: 'state', outputs: outputs.map(({ id, name }) => ({ id, name })), onAir: cards }
