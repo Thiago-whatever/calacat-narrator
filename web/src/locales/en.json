@@ -121,6 +121,8 @@
     "duels": "Duels",
     "discipline": "Discipline",
     "setpiece": "Set piece",
-    "keeper": "Goalkeeping"
+    "keeper": "Goalkeeping",
+    "history_goal": "Record books",
+    "history_pass_streak": "Record books"
   }
 }

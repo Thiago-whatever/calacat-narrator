@@ -29,6 +29,14 @@ services:
       path: Dockerfile
       context: .
       remoteBuild: true
+  agent-runtime-historian:
+    project: .
+    language: docker
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
+      remoteBuild: true
 infra:
   provider: bicep
   path: infra

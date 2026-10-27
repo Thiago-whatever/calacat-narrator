@@ -17,15 +17,17 @@ Entry for the Microsoft × Premier League "Inside the Game" hackathon, category 
 ```mermaid
 flowchart LR
   SIM["Simulator<br/>seeded, 10× speed"] -->|"POST /api/ingest"| ING["ingest<br/>Function"]
-  KICK["POST /api/matches<br/>(TODO: C16)"] -.->|queue| RUN["run_kickoff<br/>Function"] -.-> EH
+  KICK["POST /api/matches<br/>(Start a match)"] -.->|queue| RUN["run_kickoff<br/>Function"] -.-> EH
   ING --> EH[("Event Hubs")]
   EH --> INT["interpret<br/>Function"]
   INT --> STATE[("Cosmos DB<br/>match state")]
   INT -->|"signals"| SB{{"Service Bus<br/>signals topic"}}
   SB -->|"goal, penalty, shot_volume"| GS["Goal & Shot<br/>specialist"]
   SB -->|"pass_streak"| BP["Build-up & Passing<br/>specialist"]
-  GS & BP -.->|"get_event_facts"| FACTS["Facts tool"]
-  GS & BP -->|"candidates"| CT{{"Service Bus<br/>candidates topic"}}
+  SB -->|"goal, pass_streak"| HI["Historian<br/>specialist"]
+  GS & BP & HI -.->|"get_event_facts"| FACTS["Facts tool"]
+  HI -.->|"get_history_facts"| ARCH["Club archive<br/>(fictional)"]
+  GS & BP & HI -->|"candidates"| CT{{"Service Bus<br/>candidates topic"}}
   SB -.->|"dead letters"| ED
   CT --> ED["Editor<br/>budget → Reviewer → fallback"]
   ED --> CARDS[("Cosmos DB<br/>cards")]
@@ -47,7 +49,7 @@ More detail: [architecture](DOCS/architecture.md), [data model](DOCS/data-model.
 
 | Role | What it is | What it does |
 | --- | --- | --- |
-| **Specialists:** Goal & Shot, Build-up & Passing | Agent Framework agents, one Container App each, scaled on their Service Bus subscription | They get a signal kind but not the data. They call the **`get_event_facts`** tool, which returns plain words ("57'", "Bram Elsen scored for Northbridge Comets", "2–1"), and return structured JSON: a headline of up to 60 characters and a body of up to 180. A validator rejects IDs, field names, raw seconds and words like "signal" or "data". |
+| **Specialists:** Goal & Shot, Build-up & Passing, Historian | Agent Framework agents, one Container App each, scaled on their Service Bus subscription | They get a signal kind but not the data. They call the **`get_event_facts`** tool, which returns plain words ("57'", "Bram Elsen scored for Northbridge Comets", "2–1"), and return structured JSON: a headline of up to 60 characters and a body of up to 180. The **Historian** also calls **`get_history_facts`**, a fictional club and player archive, to put a goal or passing run in context ("a club record", "the club's all-time top scorer"); the record comparison is computed in code. A validator rejects IDs, field names, raw seconds and words like "signal" or "data". |
 | **Editor** | Code, not a model | It scores each candidate as event weight × rarity × recency × focus, removes duplicates by topic and allows about one card every 20–30 s. Goals, penalties and red cards skip the queue. |
 | **Reviewer** | A second agent with its own instructions | It reviews each card the Editor picks: **approve**, **revise** (wrong name, number or minute, voice, length) or **reject** (nothing newsworthy, so the slot stays free). It writes the Spanish version in the same call. Code then checks that every number in both languages appears in the facts and that each body gives the minute. |
 | **Fallback** | Templates in code | If a signal dead-letters, an agent fails, or the Reviewer times out, errors or returns invalid output, the Editor publishes an English and Spanish card built from the same facts. A critical moment is never dropped. |

@@ -1,0 +1,97 @@
+{
+  "season": "2026-27",
+  "teams": {
+    "t-home": {
+      "founded": 1891,
+      "league_titles": 7,
+      "season_goals_before": 71,
+      "record_goals": 72,
+      "record_season": "1998-99",
+      "longest_pass_run": 31,
+      "longest_pass_run_season": "2019-20"
+    },
+    "t-away": {
+      "founded": 1904,
+      "league_titles": 4,
+      "season_goals_before": 58,
+      "record_goals": 60,
+      "record_season": "1987-88",
+      "longest_pass_run": 27,
+      "longest_pass_run_season": "2022-23"
+    }
+  },
+  "players": {
+    "p-nbr-06": {
+      "career_goals": 41,
+      "appearances": 388,
+      "note_en": "has made more appearances for the club than any other outfield player",
+      "note_es": "es el jugador de campo con más partidos en la historia del club"
+    },
+    "p-nbr-07": {
+      "career_goals": 63,
+      "appearances": 301,
+      "note_en": "has 112 league assists, a club record for a midfielder",
+      "note_es": "suma 112 asistencias en liga, récord del club para un centrocampista"
+    },
+    "p-nbr-08": {
+      "career_goals": 29,
+      "appearances": 245,
+      "note_en": "was named the league's midfielder of the decade for the 2010s",
+      "note_es": "fue elegido el mejor centrocampista de la liga en la década de 2010"
+    },
+    "p-nbr-09": {
+      "career_goals": 186,
+      "appearances": 297,
+      "note_en": "is the club's all-time top scorer",
+      "note_es": "es el máximo goleador histórico del club"
+    },
+    "p-nbr-10": {
+      "career_goals": 74,
+      "appearances": 158,
+      "note_en": "scored in 9 straight league games last season, a club record",
+      "note_es": "marcó en 9 partidos de liga seguidos la temporada pasada, récord del club"
+    },
+    "p-nbr-11": {
+      "career_goals": 52,
+      "appearances": 133,
+      "note_en": "won the league's young player award in 2024-25",
+      "note_es": "ganó el premio al mejor joven de la liga en 2024-25"
+    },
+    "p-smf-06": {
+      "career_goals": 38,
+      "appearances": 412,
+      "note_en": "is the most capped player in the club's history",
+      "note_es": "es el jugador con más partidos en la historia del club"
+    },
+    "p-smf-07": {
+      "career_goals": 47,
+      "appearances": 266,
+      "note_en": "has completed more passes than any player in the league since 2020",
+      "note_es": "es el jugador con más pases completados de la liga desde 2020"
+    },
+    "p-smf-08": {
+      "career_goals": 33,
+      "appearances": 210,
+      "note_en": "has won the club's player of the season award 3 times",
+      "note_es": "ha ganado 3 veces el premio al jugador de la temporada del club"
+    },
+    "p-smf-09": {
+      "career_goals": 141,
+      "appearances": 254,
+      "note_en": "is 9 goals short of the club's all-time scoring record",
+      "note_es": "está a 9 goles del récord histórico de goles del club"
+    },
+    "p-smf-10": {
+      "career_goals": 66,
+      "appearances": 172,
+      "note_en": "has scored in 6 of the last 8 games against this opponent",
+      "note_es": "ha marcado en 6 de los últimos 8 partidos contra este rival"
+    },
+    "p-smf-11": {
+      "career_goals": 24,
+      "appearances": 61,
+      "note_en": "joined the club in 2025 for a club-record fee",
+      "note_es": "llegó al club en 2025 por un traspaso récord para el club"
+    }
+  }
+}

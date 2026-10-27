@@ -87,6 +87,11 @@ var specialistSubscriptions = [
     filter: 'sys.Label IN (\'pass_streak\', \'pass_milestone\', \'progression\')'
   }
   {
+    // Historian (ADR-046): context from the club archive for goals and passing runs.
+    name: 'historian'
+    filter: 'sys.Label IN (\'goal\', \'pass_streak\')'
+  }
+  {
     name: 'tactical'
     filter: 'sys.Label IN (\'pressure_shift\', \'attack_side_shift\', \'rhythm_change\')'
   }
