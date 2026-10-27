@@ -1,6 +1,7 @@
 node_modules/
 .azure/
 .claude/
+match.jsonl
 
 # Python
 __pycache__/
