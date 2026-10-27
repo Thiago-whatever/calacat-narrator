@@ -56,12 +56,17 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 | MCP stats server (C18) | ❌ |
 | Push cards to browsers (C12) | ✅ |
 | UI: Reporter (C13) | ✅ (`web/`; GitHub Pages deploy pending, ADR-043) |
-| UI: Overlay (C14), Fan (C15) | ❌ |
+| Facts-only realistic simulator (C36) | 🔍 PR #63 (2.8 goals, 27 shots per match over 20 seeds) |
+| Facts tool + validated captions (C37) | 🔍 PR #64, stacked on #63 |
+| Reviewer agent + Spanish (C38) | 🔍 PR #65, stacked on #64 · full `azd deploy` + 10-card review after merge |
+| Console: player, team, minute, avatar, EN/ES (C39) | 🔍 PR #66, stacked on #65 |
+| GitHub Pages receive-only demo, CORS, CSP (C40) | 🔍 PR #61 · needs public repo (G1) and Pages enabled |
+| UI: Overlay (C14), Fan (C15) | ❌ (C14 rewritten as an in-console view, ADR-043) |
 | Kick-off endpoint (C16), FT recap (C17) | ❌ |
 | CI (C25) | ❌ (tests only run locally: 74 passing, ruff clean) |
 | Deploy + smoke test (D1), public repo (G1), submission (S1) | ❌ |
 
-**Critical path left:** C12 → C13 → D1 → S1, plus G1. It's Oct 26 and the deadline is Oct 27 11:59 pm PT, so treat everything outside that path as optional.
+**Critical path left:** merge C36 → C37 → C38 → C39 and C40, then a full `azd deploy` (D1) and a 10-card review, G1, S1. It's Oct 26 and the deadline is Oct 27 11:59 pm PT, so treat everything outside that path as optional.
 
 ## What Claude has helped with so far
 - Read the hackathon rules and rubric. Flagged the deadline, scope, data-generator, persona, trademark and missing-requirement issues.

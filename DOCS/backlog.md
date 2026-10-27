@@ -24,10 +24,15 @@ Deadline Oct 27 11:59 pm PT. Order inside each priority = build order.
 | C11 | Editor: salience, rate limit, dedupe, TTL, critical preempt, **DLQ → templated fallback card**, writes cards to Cosmos | Code | C9, C10 | Multi-agent "recovery" proof (ADR-008) |
 | C12 | Push cards to browsers: Cosmos change feed → Web PubSub | Code | C11 | |
 | C13 | UI: Reporter feed + send-to-air, keyboard flow, ARIA live region | Code | C12 | Accessibility basics are not optional |
-| C14 | UI: `/overlay` page (transparent background, timed card JSON) | Code | C13 | OBS browser-source ready |
+| C14 | UI: overlay view inside the console, driven by the browser-local go-live | Code | C13 | Not a separate backend-fed page; OBS can't see it (ADR-043) |
 | C15 | UI + Personalizer: Fan mode (EN/ES, Casual↔Analyst, favorite club, player focus), cached per (card, lang, depth) | Code | C13 | Required by Rules 4.1(i)(e) |
 | C16 | "Kick off a match" endpoint + max 2 concurrent matches | Code | C3, C4 | Judges test asynchronously (ADR-016) |
 | C17 | FT recap agent (summarize the match's top cards) | Code | C11 | Recaps are named in the brief; keep it small |
+| C36 | Facts-only, realistic simulator: no `xg`/`difficulty`/`inside_opp_shape`; 20-seed realism checks | Code | C3 | ADR-037 · PR #63 |
+| C37 | Specialists query a `get_event_facts` tool and return validated 60/180 captions | Code | C36 | ADR-038 · PR #64 |
+| C38 | Reviewer agent (approve / revise / reject) + Spanish `i18n.es` on every card | Code | C37 | ADR-039, ADR-040 · PR #65 · full `azd deploy` after merge |
+| C39 | Console shows player, team, minute, avatar and an EN/ES switch | Code | C38 | ADR-040, ADR-041 · PR #66 |
+| C40 | Console on GitHub Pages as a receive-only demo (CORS, CSP) | Code + IaC | C13 | ADR-043 · PR #61 · needs G1 |
 | D1 | Deploy with `azd up` + end-to-end smoke test (goal → card in under 5 s) | Azure + IaC | all above | |
 | G1 | Make repo public + secret scanning + push protection | GitHub | C1 | Required for submission |
 | S1 | Submission: README pitch + "Built with" + testing instructions, demo video under 2 min, submit on the hackathon site | Docs | D1 | Aim for Oct 27 noon PT |
@@ -80,7 +85,8 @@ flowchart LR
     C18 --> C29[C29 Ask the match]
   end
   subgraph UI
-    C12[C12 push] --> C13[C13 Reporter] --> C14[C14 Overlay] & C15[C15 Fan mode]
+    C12[C12 push] --> C13[C13 Reporter] --> C14[C14 Overlay] & C15[C15 Fan mode] & C40[C40 Pages]
+    C36[C36 facts sim] --> C37[C37 facts tool] --> C38[C38 Reviewer + ES] --> C39[C39 cards UI]
     C15 --> C22[C22 audio] & C34[C34 PT/FR]
     C13 --> C20[C20 Control room] & C21[C21 heatmaps]
   end
