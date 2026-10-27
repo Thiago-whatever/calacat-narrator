@@ -207,6 +207,12 @@ instead. Fallback cards are written from EN and ES templates and are never revie
 Every stored card carries `i18n.es`; `score` (goals per team after the event) and, for
 shots, `body_part` (`foot` / `head` / `other`) travel from the signal.
 
+**Agent trail.** `agent` names the specialist that wrote the draft (its subscription name,
+`goal-shot` or `buildup-passing`; null for a card built from a dead-lettered signal), and
+`review` is the Reviewer's verdict: `approved` or `revised`. A fallback card has
+`source: "fallback"` and `review: null`, and keeps `agent` when it replaced that
+specialist's draft. The console shows these as badges on each card.
+
 ```json
 {
   "id": "stable-card-uuid",
@@ -228,6 +234,8 @@ shots, `body_part` (`foot` / `head` / `other`) travel from the signal.
   "topic": "goal",
   "salience": 1.0,
   "source": "specialist",
+  "agent": "goal-shot",
+  "review": "approved",
   "match_clock_s": 4020,
   "ttl_s": 180,
   "ttl": 180,

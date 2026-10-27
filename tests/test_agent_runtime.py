@@ -132,6 +132,8 @@ def test_generator_preserves_provenance_and_uses_low_reasoning() -> None:
     assert candidate.player_id == "p-nbr-09"
     assert candidate.body_part == "foot"
     assert candidate.topic == signal.kind
+    assert candidate.agent == "goal-shot"
+    assert Card.from_candidate(candidate).agent == "goal-shot"
     assert candidate.ttl_s == 180
     assert fake_agent.options == {
         "response_format": CandidateDraft,

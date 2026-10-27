@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import teamsJson from '../../../src/calacat_narrator/data/teams.json'
 import playersJson from '../../../src/calacat_narrator/data/players.json'
-import type { FeedCard, Match, Output, Phase, Player, Source, Team } from '../types'
+import type { FeedCard, Lang, Match, Output, Phase, Player, Source, Team } from '../types'
 
 // Same pattern as the backend's EntityId (schemas.py); also guards what we put in the URL.
 export const MATCH_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/
@@ -57,6 +57,9 @@ interface LiveCard {
   expires_at: string
   team_id?: string
   player_id?: string
+  /** Agent trail: the specialist's subscription name and the Reviewer's verdict. */
+  agent?: string
+  review?: 'approved' | 'revised'
   /** Spanish caption from the Reviewer (ADR-040). */
   i18n?: { es?: { headline: string; body: string } }
 }
@@ -75,9 +78,25 @@ export function parseLiveCard(data: unknown): LiveCard | null {
     (c.team_id === undefined || isString(c.team_id)) &&
     (c.player_id === undefined || c.player_id === null || isString(c.player_id))
   if (!ok) return null
+  const agent = isString(c.agent) ? c.agent : undefined
+  const review = c.review === 'approved' || c.review === 'revised' ? c.review : undefined
   const es = (c.i18n as { es?: Record<string, unknown> } | undefined)?.es
   const validEs = es && isString(es.headline) && isString(es.body) ? { headline: es.headline, body: es.body } : undefined
-  return { ...(c as unknown as LiveCard), player_id: isString(c.player_id) ? c.player_id : undefined, i18n: validEs && { es: validEs } }
+  return { ...(c as unknown as LiveCard), player_id: isString(c.player_id) ? c.player_id : undefined, agent, review, i18n: validEs && { es: validEs } }
+}
+
+// Specialists by their Service Bus subscription (AGENT_NAME); a new one shows humanized.
+const AGENT_NAMES: Record<string, Record<Lang, string>> = {
+  'goal-shot': { en: 'Goal & Shot', es: 'Gol y remate' },
+  'buildup-passing': { en: 'Build-up & Passing', es: 'Construcción y pase' },
+}
+
+function agentName(agent: string): Record<Lang, string> {
+  const known = AGENT_NAMES[agent]
+  if (known) return known
+  const words = agent.replace(/[_-]+/g, ' ')
+  const name = words.charAt(0).toUpperCase() + words.slice(1)
+  return { en: name, es: name }
 }
 
 export function toFeedCard(card: LiveCard, homeTeam: string): FeedCard {
@@ -100,7 +119,8 @@ export function toFeedCard(card: LiveCard, homeTeam: string): FeedCard {
     topic: card.topic,
     critical: CRITICAL_TOPICS.has(card.topic),
     salience: card.salience,
-    specialist: card.source === 'fallback' ? { en: 'Editor fallback', es: 'Respaldo del editor' } : undefined,
+    specialist: card.agent ? agentName(card.agent) : undefined,
+    review: card.source === 'fallback' ? 'fallback' : card.review,
     text: { en, es },
     expiresAt: Date.parse(card.expires_at),
   }

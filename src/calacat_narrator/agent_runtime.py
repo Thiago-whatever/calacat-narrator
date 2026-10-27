@@ -247,6 +247,8 @@ class Candidate(BaseModel):
     body_part: Literal["foot", "head", "other"] | None = None
     topic: str = Field(min_length=1, max_length=64)
     self_salience: float = Field(ge=0, le=1)
+    # The specialist that wrote it (its Service Bus subscription name); None for fallbacks.
+    agent: EntityId | None = None
     ttl_s: int = Field(default=DEFAULT_CARD_TTL_S, ge=1, le=300)
     match_clock_s: int = Field(ge=0)
 
@@ -273,6 +275,9 @@ class Card(BaseModel):
     topic: str = Field(min_length=1, max_length=64)
     salience: float = Field(ge=0, le=1)
     source: Literal["specialist", "fallback"] = "specialist"
+    # Agent trail for the UI: who wrote the card and the Reviewer's verdict (None if not reviewed).
+    agent: EntityId | None = None
+    review: Literal["approved", "revised"] | None = None
     ttl_s: int = Field(ge=1, le=300)
     match_clock_s: int = Field(ge=0)
     created_at: datetime
@@ -313,6 +318,7 @@ class Card(BaseModel):
             topic=candidate.topic,
             salience=candidate.self_salience,
             source=source,
+            agent=candidate.agent,
             ttl_s=candidate.ttl_s,
             match_clock_s=candidate.match_clock_s,
             created_at=created,
@@ -379,6 +385,7 @@ class FoundryCandidateGenerator:
             score=signal.score,
             topic=signal.kind,
             self_salience=draft.self_salience,
+            agent=self._specialist,
             match_clock_s=signal.match_clock_s,
         )
 

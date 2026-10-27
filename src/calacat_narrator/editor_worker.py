@@ -200,8 +200,10 @@ async def _submit_fallback_card(
         team_id=card.team_id,
         player_id=card.player_id,
         body_part=card.body_part,
+        score=card.score,
         topic=card.topic,
         self_salience=card.salience,
+        agent=card.agent,
         ttl_s=card.ttl_s,
         match_clock_s=card.match_clock_s,
     )

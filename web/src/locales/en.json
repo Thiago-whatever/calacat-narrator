@@ -94,6 +94,10 @@
   "matchesBusy": "Two matches are already running. Try again in {min} min.",
   "matchesDaily": "Today's match limit is reached. Try again tomorrow.",
   "startFailed": "Couldn't start a match. Try again.",
+  "trail": "Agent trail",
+  "reviewed": "Reviewed",
+  "revised": "Revised by Reviewer",
+  "fallback": "Fallback template",
   "topics": {
     "goal": "Goal",
     "passing": "Build-up",

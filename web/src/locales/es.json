@@ -94,6 +94,10 @@
   "matchesBusy": "Ya hay dos partidos en curso. Intenta de nuevo en {min} min.",
   "matchesDaily": "Se alcanzó el límite de partidos de hoy. Intenta de nuevo mañana.",
   "startFailed": "No se pudo iniciar un partido. Intenta de nuevo.",
+  "trail": "Recorrido de agentes",
+  "reviewed": "Revisada",
+  "revised": "Corregida por el revisor",
+  "fallback": "Plantilla de respaldo",
   "topics": {
     "goal": "Gol",
     "passing": "Construcción",
