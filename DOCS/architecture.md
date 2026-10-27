@@ -23,7 +23,7 @@ flowchart LR
   SB -->|DLQ| ED
   ED --> CARDS[(Cosmos cards)]
   CARDS -->|change feed| PUB[Web PubSub]
-  PUB --> UI[Reporter · Overlay · Fan<br/>Static Web Apps]
+  PUB --> UI[Reporter · Overlay · Fan<br/>GitHub Pages]
   UI --> PER[Personalizer<br/>lang · depth · focus · TTS]
 ```
 
@@ -39,7 +39,7 @@ flowchart LR
 | SNS + filter policies | **Service Bus topics + SQL filters** | Adds dead-letter queues and sessions; Event Grid is the lighter alternative (ADR-004) |
 | Agents (unspecified) | **Microsoft Agent Framework** + **Foundry** models | Foundry gives model hosting, tracing, evals |
 | WebSocket push | **Web PubSub** | ≈ API Gateway WebSocket APIs |
-| Static site | **Static Web Apps** | ≈ S3 + CloudFront / Amplify |
+| Static site | **GitHub Pages** (not Azure) | Azure equivalent would be Static Web Apps ≈ S3 + CloudFront / Amplify; Pages chosen for an open demo (ADR-043) |
 | Polly | **AI Speech** | Neural TTS in many languages |
 | CloudFormation/CDK | **Bicep + azd** | `azd up` provisions and deploys |
 

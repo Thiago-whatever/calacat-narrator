@@ -33,7 +33,7 @@ Work through **issues → PRs**, not straight to `main`. The history becomes evi
 ## Hosting (what runs where)
 | Component | Service | Scale |
 |---|---|---|
-| Web UI | Static Web Apps (Free) | — |
+| Web UI (Reporter console) | GitHub Pages, published by GitHub Actions; receive-only demo, no sign-in (ADR-043) | — |
 | Simulator, agents, Editor, MCP server | Container Apps | Editor stays at one replica to monitor signal DLQs; other workloads scale to zero when idle |
 | Ingest, Interpreter | Functions (Linux Consumption, Y1) | event-driven |
 | Stream | Event Hubs Standard, 1 TU | Capture needs Standard |
