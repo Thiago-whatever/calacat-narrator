@@ -121,6 +121,17 @@ A success toast ("Card is live on TV 1", with Pull) appears bottom-right over th
 - Card anatomy: neutral team chip, topic pill (goals in magenta), minute, `New` / `Live · TV 1, Stream` pills; silhouette with jersey number (player cards) or team shield (team cards); player line; headline; body; specialist name, match score (in All games), salience bar with the number.
 - Click previews the card on the monitor; drag it with a ghost onto any point of the monitor. A card that is live on the selected output is locked (not clickable or draggable, `aria-disabled`).
 
+### Getting started
+
+- An **ⓘ How it works** button sits after the Accessibility button. It opens a dialog explaining the demo (scripted, in the browser, instant) and, when the API is configured, the live match (simulated on the server, written by the agents, first cards within a minute), followed by the four steps to put a card on air. It opens by itself on a first visit only (remembered per browser); Esc or **Got it** closes it.
+
+### On-air output
+
+- **Open on-air output** opens `?overlay=<output>` in a new tab: what viewers of that transmission get, never an editing surface. The console is titled **Control room** so the two are never confused.
+- Its header says **On-air output · TV 1** with a **What viewers see** tag, the transmission switcher, **Back to control room**, and the same language and Accessibility controls as the console.
+- A tally strip above the stage reads **ON AIR · TV 1** in red with the headline, or **OFF AIR · TV 1** in grey; the stage gets a red frame while on air. A note below repeats that nothing here can be edited.
+- The card keeps the language it went live in, as viewers saw it; the language switch changes the page around it.
+
 ## Accessibility
 
 Target WCAG 2.2 AA (see [accessibility.md](accessibility.md)).

@@ -49,7 +49,7 @@ function viewHref(overlay: string | null): string {
   return query ? `?${query}` : window.location.pathname
 }
 
-function Overlay({ lang }: { lang: Lang }) {
+function Overlay({ lang, setLang, prefs, setPrefs }: Omit<PrefsProps, 'starter'>) {
   const [output, setOutput] = useState(() => overlayFromUrl() ?? 'o1')
   useEffect(() => {
     document.documentElement.lang = lang
@@ -59,7 +59,18 @@ function Overlay({ lang }: { lang: Lang }) {
     window.history.replaceState(null, '', viewHref(id))
     setOutput(id)
   }
-  return <OverlayView t={STRINGS[lang]} output={output} onOutput={choose} consoleHref={viewHref(null)} />
+  return (
+    <OverlayView
+      t={STRINGS[lang]}
+      lang={lang}
+      onLang={setLang}
+      prefs={prefs}
+      onPrefs={setPrefs}
+      output={output}
+      onOutput={choose}
+      consoleHref={viewHref(null)}
+    />
+  )
 }
 
 interface Starter {
@@ -95,7 +106,7 @@ export default function App() {
   if (overlayFromUrl()) {
     return (
       <AppThemeProvider prefs={prefs.prefs}>
-        <Overlay lang={prefs.lang} />
+        <Overlay {...prefs} />
       </AppThemeProvider>
     )
   }

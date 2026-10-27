@@ -174,3 +174,14 @@ describe('start a match (C16)', () => {
     expect(startMessage(STRINGS.es, { status: 'idle' })).toBe('')
   })
 })
+
+describe('translations', () => {
+  it('keep the same placeholders in English and Spanish', () => {
+    const slots = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
+    const { en, es } = STRINGS
+    for (const key of Object.keys(en) as (keyof typeof en)[]) {
+      const value = en[key]
+      if (typeof value === 'string') expect(slots(es[key] as string), key).toEqual(slots(value))
+    }
+  })
+})

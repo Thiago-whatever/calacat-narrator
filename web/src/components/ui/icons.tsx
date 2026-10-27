@@ -27,5 +27,6 @@ export const AccessibilityIcon = strokeIcon(['M5 8.5l7 1.6 7-1.6M12 10.1v4.9m0 0
 export const StopIcon = strokeIcon(['M7.5 5h9A2.5 2.5 0 0 1 19 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 16.5v-9A2.5 2.5 0 0 1 7.5 5z'], 2.2)
 export const BroadcastIcon = strokeIcon(['M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9', 'M12 9.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z'])
 export const UndoIcon = strokeIcon(['M9 14L4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11'], 2.2)
+export const InfoIcon = strokeIcon(['M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z', 'M12 11v5.5M12 7.5h.01'], 2)
 export const CheckIcon = strokeIcon(['M5 12.5l4.5 4.5L19 7.5'], 2.6)
 export const LogoIcon = strokeIcon(['M5 19.5V8.5L7.5 4l3.2 3.5h2.6L16.5 4 19 8.5v11z', 'M9.5 13h.01M14.5 13h.01'], 1.8)

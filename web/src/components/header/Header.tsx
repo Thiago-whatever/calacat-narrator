@@ -1,4 +1,5 @@
 import { Box, Button, Typography } from '@mui/material'
+import type { ReactNode } from 'react'
 import type { Strings } from '../../i18n'
 import type { ThemePrefs } from '../../theme/theme'
 import type { Lang } from '../../types'
@@ -6,6 +7,7 @@ import { LogoIcon, PauseIcon, PlayIcon } from '../ui/icons'
 import { Pill } from '../ui/primitives'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { AccessibilityMenu } from './AccessibilityMenu'
+import { HelpDialog } from './HelpDialog'
 import { OutputSwitcher, type OutputOption } from './OutputSwitcher'
 
 interface Props {
@@ -52,6 +54,24 @@ function Brand({ sub }: { sub: string }) {
   )
 }
 
+/** Language toggle and accessibility menu, shared by the console and the on-air output. */
+export function ViewPrefs({ t, lang, onLang, prefs, onPrefs, children }: Pick<Props, 't' | 'lang' | 'onLang' | 'prefs' | 'onPrefs'> & { children?: ReactNode }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', gridColumn: '1 / -1' }}>
+      {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
+      <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
+      <AccessibilityMenu
+        label={t.a11y}
+        options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
+        shortcuts={t.shortcuts}
+        prefs={prefs}
+        onChange={onPrefs}
+      />
+      {children}
+    </Box>
+  )
+}
+
 export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start, overlay, outputs, output, onOutput, period }: Props) {
   return (
     <Box
@@ -89,15 +109,9 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
           </Typography>
         )}
         <Button component="a" href={overlay.href} target="_blank" rel="noopener" sx={{ gridColumn: '1 / -1' }}>{overlay.label}</Button>
-        {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
-        <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
-        <AccessibilityMenu
-          label={t.a11y}
-          options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
-          shortcuts={t.shortcuts}
-          prefs={prefs}
-          onChange={onPrefs}
-        />
+        <ViewPrefs t={t} lang={lang} onLang={onLang} prefs={prefs} onPrefs={onPrefs}>
+          <HelpDialog t={t} demo={run && t.start} live={start && t.startMatch} overlay={overlay.label} />
+        </ViewPrefs>
       </Box>
     </Box>
   )
