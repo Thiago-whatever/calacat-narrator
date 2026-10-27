@@ -26,6 +26,7 @@ from calacat_narrator.kickoff import (
     claim_kickoff,
     new_kickoff,
     parse_kickoff,
+    release_kickoff,
     run_match,
 )
 from calacat_narrator.schemas import MatchEvent
@@ -168,7 +169,7 @@ def start_match(req: func.HttpRequest, kickoff: func.Out[str]) -> func.HttpRespo
     except ValueError:
         return _json_response({"error": "invalid_request"}, 400)
     try:
-        claim_kickoff(get_match_container(), message)
+        joined = claim_kickoff(get_match_container(), message)
     except KickoffLimit as limit:
         return _json_response(
             {"error": limit.reason, "retry_after_s": limit.retry_after_s},
@@ -178,6 +179,11 @@ def start_match(req: func.HttpRequest, kickoff: func.Out[str]) -> func.HttpRespo
     except (AzureError, RuntimeError):
         logger.exception("Failed to claim a match slot")
         return _json_response({"error": "cosmos_unavailable"}, 503)
+    if joined is not None:
+        # A match is already live (or just started): follow it instead of starting another.
+        return _json_response(
+            {"match_id": joined, "status": "joined"}, 202, headers={"Cache-Control": "no-store"}
+        )
     kickoff.set(message.model_dump_json())
     return _json_response(
         {"match_id": message.match_id, "speed": message.speed, "status": "starting"},
@@ -194,5 +200,9 @@ def run_kickoff(message: func.QueueMessage) -> None:
     except ValidationError:
         logger.error("Discarding invalid kickoff message %s", message.id)
         return
-    published = run_match(kickoff, publish_event)
-    logger.info("Match %s finished: %d events", kickoff.match_id, published)
+    try:
+        published = run_match(kickoff, publish_event)
+        logger.info("Match %s finished: %d events", kickoff.match_id, published)
+    finally:
+        # Finished or crashed: give the slot back now instead of at busy_until.
+        release_kickoff(get_match_container(), kickoff.match_id)

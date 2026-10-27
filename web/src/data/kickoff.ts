@@ -3,14 +3,15 @@ import type { Strings } from '../i18n'
 import { MATCH_ID_PATTERN } from './live'
 
 export type StartState =
-  | { status: 'idle' | 'starting' | 'started' | 'daily_cap' | 'error' }
+  | { status: 'idle' | 'starting' | 'started' | 'joined' | 'daily_cap' | 'error' }
   | { status: 'busy'; retryMin: number }
 
 /** Maps the `POST /api/matches` response (ADR-044) to what the console shows. */
 export function readStartResponse(httpStatus: number, body: unknown): StartState & { matchId?: string } {
   const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
   if (httpStatus === 202 && typeof b.match_id === 'string' && MATCH_ID_PATTERN.test(b.match_id)) {
-    return { status: 'started', matchId: b.match_id }
+    // "joined": a match was already live (or just started), so the server points us at it.
+    return { status: b.status === 'joined' ? 'joined' : 'started', matchId: b.match_id }
   }
   if (httpStatus === 429 && b.error === 'daily_cap') return { status: 'daily_cap' }
   if (httpStatus === 429) {
@@ -24,6 +25,7 @@ export function startMessage(t: Strings, state: StartState): string {
   switch (state.status) {
     case 'starting': return t.startingMatch
     case 'started': return t.matchStarted
+    case 'joined': return t.matchJoined
     case 'busy': return t.matchesBusy.replace('{min}', String(state.retryMin))
     case 'daily_cap': return t.matchesDaily
     case 'error': return t.startFailed

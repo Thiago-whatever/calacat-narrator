@@ -13,6 +13,7 @@ from calacat_narrator.kickoff import (
     KickoffMessage,
     claim_kickoff,
     parse_kickoff,
+    release_kickoff,
     run_match,
 )
 
@@ -128,38 +129,49 @@ def test_endpoint_queues_a_server_picked_seed(monkeypatch) -> None:
 # ---- Running cap
 
 
-def test_a_third_match_gets_busy_until_a_slot_frees() -> None:
+def test_when_both_slots_are_busy_a_third_request_joins_the_latest_match() -> None:
     container = FakeContainer()
-    claim_kickoff(container, message(1), now=NOW)
-    claim_kickoff(container, message(2), now=NOW + timedelta(seconds=30))
+    assert claim_kickoff(container, message(1), now=NOW) is None
+    assert claim_kickoff(container, message(2), now=NOW + timedelta(minutes=2)) is None
 
-    with pytest.raises(KickoffLimit) as limit:
-        claim_kickoff(container, message(3), now=NOW + timedelta(seconds=60))
-    assert limit.value.reason == "busy"
-    assert limit.value.retry_after_s == message().run_s - 60
+    joined = claim_kickoff(container, message(3), now=NOW + timedelta(minutes=3))
 
-    claim_kickoff(container, message(3), now=NOW + timedelta(seconds=message().run_s))
+    # The latest-ending match has the most game left; joining doesn't use the daily cap.
+    assert joined == "m-seed-2"
+    assert container.items[f"day-{NOW.date().isoformat()}"]["count"] == 2
+
+    after_first = NOW + timedelta(seconds=message().run_s)
+    assert claim_kickoff(container, message(3), now=after_first) is None
     assert container.items["slot-0"]["running"] == "m-seed-3"
 
 
-def test_endpoint_returns_429_with_retry_after(monkeypatch) -> None:
+def test_a_click_right_after_a_kickoff_joins_it_even_with_a_free_slot() -> None:
+    container = FakeContainer()
+    claim_kickoff(container, message(1), now=NOW)
+
+    assert claim_kickoff(container, message(2), now=NOW + timedelta(seconds=30)) == "m-seed-1"
+    assert claim_kickoff(container, message(2), now=NOW + timedelta(seconds=90)) is None
+    assert container.items[f"day-{NOW.date().isoformat()}"]["count"] == 2
+
+
+def test_endpoint_joins_instead_of_queuing_a_second_match(monkeypatch) -> None:
     container = FakeContainer()
     monkeypatch.setattr(function_app, "get_match_container", lambda: container)
-    for _ in range(2):
-        assert function_app.start_match(post(), FakeOut()).status_code == 202
+    first = FakeOut()
+    started = json.loads(function_app.start_match(post(), first).get_body())
     out = FakeOut()
 
     response = function_app.start_match(post(), out)
 
-    assert response.status_code == 429
-    assert json.loads(response.get_body())["error"] == "busy"
-    assert int(response.headers["Retry-After"]) > 0
+    assert response.status_code == 202
+    assert json.loads(response.get_body()) == {"match_id": started["match_id"], "status": "joined"}
     assert out.value is None
 
 
 def test_racing_requests_for_the_last_slot_have_one_winner(monkeypatch) -> None:
     container = FakeContainer()
-    claim_kickoff(container, message(1), now=NOW)
+    # Started long enough ago that the next request races for slot-1 instead of joining it.
+    claim_kickoff(container, message(1), now=NOW - timedelta(minutes=2))
     real_count = kickoff._count_today
 
     def count_then_lose_the_race(target, now):
@@ -206,3 +218,49 @@ def test_run_streams_every_event_at_the_requested_speed() -> None:
     assert count == len(published) > 0
     assert {event.match_id for event in published} == {"m-seed-7"}
     assert sum(slept) == pytest.approx(5400 / 20)
+
+
+def test_a_failed_publish_skips_that_event_and_the_match_goes_on() -> None:
+    published = []
+    failures = iter([RuntimeError("token refresh hiccup")])
+
+    def flaky(event):
+        if not published and (error := next(failures, None)):
+            raise error
+        published.append(event)
+
+    count = run_match(message(7, speed=20), flaky, lambda seconds: None)
+    every = run_match(message(7, speed=20), lambda event: None, lambda seconds: None)
+
+    assert count == len(published) == every - 1
+
+
+def test_release_frees_only_that_matchs_slot() -> None:
+    container = FakeContainer()
+    claim_kickoff(container, message(1), now=NOW - timedelta(minutes=5))
+    claim_kickoff(container, message(2), now=NOW - timedelta(minutes=3))
+
+    release_kickoff(container, "m-seed-1", now=NOW)
+
+    assert container.items["slot-0"]["busy_until"] == NOW.isoformat()
+    assert datetime.fromisoformat(container.items["slot-1"]["busy_until"]) > NOW
+    assert claim_kickoff(container, message(3), now=NOW + timedelta(seconds=1)) is None
+    assert container.items["slot-0"]["running"] == "m-seed-3"
+
+
+def test_run_kickoff_releases_the_slot_even_when_the_run_crashes(monkeypatch) -> None:
+    container = FakeContainer()
+    monkeypatch.setattr(function_app, "get_match_container", lambda: container)
+    claim_kickoff(container, message(4))
+
+    def crash(*args, **kwargs):
+        raise ValueError("bug")
+
+    monkeypatch.setattr(function_app, "run_match", crash)
+    queued = func.QueueMessage(body=message(4).model_dump_json().encode())
+
+    with pytest.raises(ValueError):
+        function_app.run_kickoff(queued)
+
+    slot = container.items["slot-0"]
+    assert datetime.fromisoformat(slot["busy_until"]) <= datetime.now(UTC)

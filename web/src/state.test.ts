@@ -122,6 +122,7 @@ describe('on-air minute', () => {
 describe('start a match (C16)', () => {
   it('follows a started match and reads both caps', () => {
     expect(readStartResponse(202, { match_id: 'm-seed-42', speed: 10 })).toEqual({ status: 'started', matchId: 'm-seed-42' })
+    expect(readStartResponse(202, { match_id: 'm-seed-7', status: 'joined' })).toEqual({ status: 'joined', matchId: 'm-seed-7' })
     expect(readStartResponse(429, { error: 'busy', retry_after_s: 301 })).toEqual({ status: 'busy', retryMin: 6 })
     expect(readStartResponse(429, { error: 'daily_cap', retry_after_s: 9000 })).toEqual({ status: 'daily_cap' })
   })

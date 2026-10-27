@@ -2,6 +2,7 @@
 and the server-side run that streams one seeded match into Event Hubs."""
 
 import json
+import logging
 import secrets
 import time
 from collections.abc import Callable
@@ -9,12 +10,15 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from azure.core import MatchConditions
+from azure.core.exceptions import AzureError
 from azure.cosmos import ContainerProxy
 from azure.cosmos.exceptions import CosmosHttpResponseError, CosmosResourceNotFoundError
 from pydantic import BaseModel, ConfigDict, Field
 
 from .schemas import MatchEvent, PositionSnapshot
 from .simulator import MATCH_DURATION_S, simulate_match
+
+logger = logging.getLogger(__name__)
 
 KICKOFF_QUEUE = "match-kickoffs"
 MAX_KICKOFF_BODY_BYTES = 1024
@@ -26,6 +30,8 @@ MIN_SPEED, DEFAULT_SPEED, MAX_SPEED = 5, 10, 20
 KICKOFF_PARTITION = "kickoffs"
 SLOT_MARGIN_S = 60
 MAX_WRITE_ATTEMPTS = 3
+# A click this soon after another kick-off joins that match instead of starting a new one.
+JOIN_RECENT_S = 60
 
 
 class KickoffRequest(BaseModel):
@@ -121,22 +127,33 @@ def _count_today(container: ContainerProxy, now: datetime) -> None:
 
 def claim_kickoff(
     container: ContainerProxy, message: KickoffMessage, *, now: datetime | None = None
-) -> None:
-    """Take one of the running-match slots and count the match against today's cap.
+) -> str | None:
+    """Take a running-match slot and count it against today's cap, or name a match to join.
 
-    A slot is free when it was never used or its match has finished; ETags make two requests
-    racing for the last slot settle on one winner.
+    Returns None when `message` got a slot. Returns a running match's ID instead when every
+    slot is busy, or when a match kicked off within JOIN_RECENT_S: judges then land on a live
+    feed, and repeated clicks don't burn the daily cap. A slot is free when it was never used
+    or its match has finished; ETags make two requests racing for the last slot settle on one
+    winner.
     """
     current = now or datetime.now(UTC)
     slots = [(f"slot-{i}", _read(container, f"slot-{i}")) for i in range(MAX_RUNNING_MATCHES)]
-    free = [
-        (slot_id, document)
-        for slot_id, document in slots
-        if document is None or datetime.fromisoformat(document["busy_until"]) <= current
+    running = [
+        document
+        for _, document in slots
+        if document is not None and datetime.fromisoformat(document["busy_until"]) > current
     ]
-    if not free:
-        soonest = min(datetime.fromisoformat(document["busy_until"]) for _, document in slots)
-        raise KickoffLimit("busy", int((soonest - current).total_seconds()))
+    recent = [
+        document
+        for document in running
+        if "started_at" in document
+        and current - datetime.fromisoformat(document["started_at"])
+        < timedelta(seconds=JOIN_RECENT_S)
+    ]
+    if recent or len(running) == len(slots):
+        # The latest-ending match has the most of the game left to watch.
+        return max(recent or running, key=lambda document: document["busy_until"])["running"]
+    free = [(slot_id, document) for slot_id, document in slots if document not in running]
 
     _count_today(container, current)
     slot_id, document = free[0]
@@ -145,10 +162,33 @@ def claim_kickoff(
         "id": slot_id,
         "match_id": KICKOFF_PARTITION,
         "running": message.match_id,
+        "started_at": current.isoformat(),
         "busy_until": (current + timedelta(seconds=message.run_s)).isoformat(),
     }
     if not _write(container, body, document["_etag"] if document else None):
         raise KickoffLimit("busy", SLOT_MARGIN_S)
+    return None
+
+
+def release_kickoff(
+    container: ContainerProxy, match_id: str, *, now: datetime | None = None
+) -> None:
+    """Free the slot of a match that finished or crashed, so capacity returns right away.
+
+    Best effort: if this fails, the slot still frees itself at `busy_until`.
+    """
+    current = now or datetime.now(UTC)
+    try:
+        for i in range(MAX_RUNNING_MATCHES):
+            document = _read(container, f"slot-{i}")
+            if document is None or document.get("running") != match_id:
+                continue
+            if datetime.fromisoformat(document["busy_until"]) > current:
+                body = {**_clean(document), "busy_until": current.isoformat()}
+                _write(container, body, document["_etag"])
+            return
+    except (AzureError, RuntimeError):
+        logger.warning("Could not release the slot for %s", match_id, exc_info=True)
 
 
 def run_match(
@@ -156,12 +196,22 @@ def run_match(
     publish: Callable[[MatchEvent], None],
     sleep: Callable[[float], None] = time.sleep,
 ) -> int:
-    """Stream the seeded match at its speed, like the simulator CLI's --ingest-url mode."""
+    """Stream the seeded match at its speed, like the simulator CLI's --ingest-url mode.
+
+    The queue message is tried once (maxDequeueCount 1), so a failed publish skips that event
+    rather than ending the match the judge is watching.
+    """
     published = 0
     previous_s: int | None = None
     for record in simulate_match(message.seed):
         if isinstance(record, MatchEvent):
-            publish(record)
+            try:
+                publish(record)
+            except (AzureError, RuntimeError):
+                logger.warning(
+                    "Skipping event %s of %s", record.event_id, message.match_id, exc_info=True
+                )
+                continue
             published += 1
         elif isinstance(record, PositionSnapshot):
             if previous_s is not None:
