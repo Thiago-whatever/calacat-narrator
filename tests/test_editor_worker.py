@@ -5,7 +5,7 @@ import pytest
 from azure.cosmos.exceptions import CosmosResourceExistsError
 
 from calacat_narrator import editor_worker
-from calacat_narrator.agent_runtime import Candidate, LocalizedCaption, ReviewDecision
+from calacat_narrator.agent_runtime import Candidate, Card, LocalizedCaption, ReviewDecision
 from calacat_narrator.cosmos import persist_card
 from calacat_narrator.editor import Editor, EditorConfig, fallback_card
 from calacat_narrator.signals import Signal
@@ -318,23 +318,67 @@ def goal_candidate_message() -> FakeMessage:
     )
 
 
-def test_rejected_card_is_dropped_and_frees_the_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rejected_goal_still_publishes_the_template(monkeypatch: pytest.MonkeyPatch) -> None:
     receiver, message, container = FakeReceiver(), goal_candidate_message(), FakeContainer()
     monkeypatch.setattr(editor_worker, "get_cards_container", lambda: container)
-    editor = Editor(EditorConfig.load())
-    now = datetime(2026, 10, 25, tzinfo=UTC)
+    monkeypatch.setattr(editor_worker, "publish_cards", lambda cards: None)
 
     asyncio.run(
         editor_worker.process_candidate_message(
-            receiver, message, editor, {}, now=now, reviewer=RejectingReviewer()
+            receiver,
+            message,
+            Editor(EditorConfig.load()),
+            {},
+            now=datetime(2026, 10, 25, tzinfo=UTC),
+            reviewer=RejectingReviewer(),
         )
     )
 
-    assert container.documents == []
+    # A goal must never vanish because the Reviewer called it not newsworthy.
+    assert [document["source"] for document in container.documents] == ["fallback"]
+    assert container.documents[0]["i18n"]["es"]["body"]
     assert receiver.completed == [message]
-    # Nothing was published, so the next card is not held back by the rate limit.
-    editor.submit(Candidate.model_validate_json(candidate_json()), now=now + timedelta(seconds=1))
-    assert editor.peek_due(now=now + timedelta(seconds=1)) is not None
+
+
+def test_rejected_non_critical_card_is_not_stored(monkeypatch: pytest.MonkeyPatch) -> None:
+    container = FakeContainer()
+    monkeypatch.setattr(editor_worker, "get_cards_container", lambda: container)
+    card = Card.from_candidate(
+        Candidate.model_validate_json(candidate_json()),
+        created_at=datetime(2026, 10, 25, tzinfo=UTC),
+    )
+
+    stored = asyncio.run(
+        editor_worker._review_and_store(card, Editor(EditorConfig.load()), RejectingReviewer())
+    )
+
+    # Not stored, so _settle leaves the publish slot free for the next card.
+    assert stored is False
+    assert container.documents == []
+
+
+@pytest.mark.parametrize(
+    ("topic", "field"), [("goal", "critical_review_timeout_s"), ("shot_volume", "review_timeout_s")]
+)
+def test_critical_cards_get_the_shorter_review_timeout(
+    monkeypatch: pytest.MonkeyPatch, topic: str, field: str
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def spy(card, reviewer, *, timeout_s, critical_topics):
+        seen.update(timeout_s=timeout_s, critical_topics=critical_topics)
+
+    monkeypatch.setattr(editor_worker, "review_card", spy)
+    config = EditorConfig.load()
+    body = candidate_json().replace(b"shot_volume", topic.encode())
+    card = Card.from_candidate(
+        Candidate.model_validate_json(body), created_at=datetime(2026, 10, 25, tzinfo=UTC)
+    )
+
+    asyncio.run(editor_worker._review_and_store(card, Editor(config), RejectingReviewer()))
+
+    assert seen == {"timeout_s": getattr(config, field), "critical_topics": config.critical_topics}
+    assert config.critical_review_timeout_s < config.review_timeout_s
 
 
 def test_every_stored_card_carries_spanish(monkeypatch: pytest.MonkeyPatch) -> None:

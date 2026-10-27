@@ -6,6 +6,8 @@ max_ttl_s: 180
 recency_half_life_s: 120
 # Reviewer agent call (ADR-039); on timeout the templated fallback card is published.
 review_timeout_s: 10
+# Critical topics keep the ~5 s goal → card budget after two specialist calls (ADR-038).
+critical_review_timeout_s: 3
 critical_topics:
   - goal
   - red_card

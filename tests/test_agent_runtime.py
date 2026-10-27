@@ -130,9 +130,14 @@ def test_generator_preserves_provenance_and_uses_low_reasoning() -> None:
     assert candidate.entity_ids == ["t-home"]
     assert candidate.team_id == "t-home"
     assert candidate.player_id == "p-nbr-09"
+    assert candidate.body_part == "foot"
     assert candidate.topic == signal.kind
     assert candidate.ttl_s == 180
-    assert fake_agent.options == {"response_format": CandidateDraft, "reasoning": {"effort": "low"}}
+    assert fake_agent.options == {
+        "response_format": CandidateDraft,
+        "reasoning": {"effort": "low"},
+        "tool_choice": {"mode": "required", "required_function_name": "get_event_facts"},
+    }
     assert fake_agent.tool_names == ["get_event_facts"]
 
 
