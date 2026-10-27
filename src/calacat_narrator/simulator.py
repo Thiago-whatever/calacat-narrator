@@ -3,6 +3,7 @@
 import argparse
 import json
 import math
+import os
 import random
 import sys
 import time
@@ -445,13 +446,24 @@ def _positive_float(value: str) -> float:
     return parsed
 
 
-def _post_event(url: str, event: MatchEvent) -> None:
+INGEST_KEY_ENV = "INGEST_FUNCTION_KEY"
+
+
+def _post_event(url: str, event: MatchEvent, function_key: str | None = None) -> None:
     body = json.dumps(event.model_dump(mode="json", exclude_none=True)).encode("utf-8")
-    request = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    headers = {"Content-Type": "application/json"}
+    if function_key:
+        headers["x-functions-key"] = function_key
+    request = Request(url, data=body, headers=headers, method="POST")
     try:
         with urlopen(request, timeout=10):
             pass
-    except (HTTPError, URLError) as error:
+    except HTTPError as error:
+        hint = f"; set {INGEST_KEY_ENV} to the Function key" if error.code == 401 else ""
+        raise RuntimeError(
+            f"Failed to POST event {event.event_id} to {url}: {error}{hint}"
+        ) from error
+    except URLError as error:
         raise RuntimeError(f"Failed to POST event {event.event_id} to {url}: {error}") from error
 
 
@@ -490,11 +502,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--ingest-url",
-        help="optional HTTP(S) /ingest URL; event envelopes are POSTed as JSON",
+        help=f"optional HTTP(S) /ingest URL; event envelopes are POSTed as JSON with the "
+        f"Function key from {INGEST_KEY_ENV} (unset is fine for a local `func start`)",
     )
     args = parser.parse_args(argv)
 
     ingest_url = _validate_ingest_url(args.ingest_url) if args.ingest_url else None
+    # From the environment only, so the key never lands in shell history or process lists.
+    function_key = os.environ.get(INGEST_KEY_ENV) or None
     output, should_close = _open_output(args.output)
     previous_snapshot_s: int | None = None
     try:
@@ -502,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
             output.write(serialize_record(record))
             output.write("\n")
             if isinstance(record, MatchEvent) and ingest_url:
-                _post_event(ingest_url, record)
+                _post_event(ingest_url, record, function_key)
             elif isinstance(record, PositionSnapshot) and ingest_url:
                 if previous_snapshot_s is not None:
                     elapsed_s = record.match_clock_s - previous_snapshot_s
