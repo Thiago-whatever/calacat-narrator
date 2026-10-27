@@ -26,6 +26,9 @@ param foundryModelDeploymentName string = 'narrator-chat'
 @description('Images azd last deployed, keyed by service name (SERVICE_<NAME>_IMAGE_NAME).')
 param containerImages object = {}
 
+@description('GitHub Pages origin of the Reporter console; the Function App allows only this origin.')
+param webConsoleOrigin string = 'https://thiago-whatever.github.io'
+
 var environmentToken = take(replace(toLower(environmentName), '-', ''), 8)
 var nameSuffix = take(uniqueString(subscription().id, resourceGroup().id, environmentName), 8)
 var baseName = 'calacat${environmentToken}${nameSuffix}'
@@ -116,6 +119,7 @@ module compute 'modules/compute.bicep' = {
     foundryProjectResourceId: foundryProject.id
     foundryProjectEndpoint: foundryProject.properties.endpoints['AI Foundry API']
     foundryModelDeploymentName: foundryModelDeploymentName
+    webConsoleOrigin: webConsoleOrigin
     tags: tags
   }
 }

@@ -26,6 +26,8 @@ param foundryProjectResourceId string
 param foundryProjectEndpoint string
 param foundryModelDeploymentName string
 param tags object
+@description('Browser origin of the GitHub Pages console, the only origin allowed by CORS (ADR-043).')
+param webConsoleOrigin string
 
 // The registry is empty on first provision; later provisions keep what azd deployed.
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -302,6 +304,12 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
     }
     siteConfig: {
       minTlsVersion: '1.2'
+      cors: {
+        allowedOrigins: [
+          webConsoleOrigin
+        ]
+        supportCredentials: false
+      }
       appSettings: [
         {
           name: 'AzureWebJobsStorage__accountName'
