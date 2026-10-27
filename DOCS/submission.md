@@ -24,8 +24,8 @@ Do these in order. Each one depends on the step before it.
    - `azd deploy`: the Function key on `/api/ingest` (#61) and `POST /api/matches` (C16, #68) are Function code.
 7. **Logged-out check**, in a private window with no GitHub session:
    - The repo page and README load. The Mermaid diagram renders.
-   - https://thiago-whatever.github.io/calacat-narrator/ loads. Start match → go live → pull works, and **Open on-air output** shows the card with the ON AIR tally.
-   - A live match shows cards. Use **Start a match** (the judges' path). The README's simulator option needs your Function key, so it only works for you or in a reader's own subscription.
+   - https://thiago-whatever.github.io/calacat-narrator/ loads. Play demo → go live → pull works, and **Open on-air output** shows the card with the ON AIR tally.
+   - A live match shows cards. Use **Start live match** (the judges' path). The README's simulator option needs your Function key, so it only works for you or in a reader's own subscription.
    - The video link plays without signing in.
 8. **Submit** the form with the text below. Then remove the TODO in the README if C16 is live.
 
@@ -35,7 +35,7 @@ Record at 1080p. Use the console in a light theme, at 10× match speed and with 
 
 | Time | On screen | Voice-over |
 | --- | --- | --- |
-| 0:00–0:12 | Console in English, empty feed. Press **Start a match** (or run the simulator) | "This is Calacat Narrator. A team of AI agents watches a live football match and writes the insight cards a broadcaster can put on air, and checks them first." |
+| 0:00–0:12 | Console in English, empty feed. Press **Start live match** (or run the simulator) | "This is Calacat Narrator. A team of AI agents watches a live football match and writes the insight cards a broadcaster can put on air, and checks them first." |
 | 0:12–0:30 | Mermaid diagram from the README, zooming along the flow | "Events go through Azure Functions into Event Hubs. The interpreter keeps the match state in Cosmos DB and fires a signal only when something is worth saying. Service Bus routes each signal to a specialist agent." |
 | 0:30–0:50 | First cards arrive in the feed; hover one | "Each specialist runs on Microsoft Agent Framework with a Foundry model. It doesn't get the numbers in its prompt: it calls a facts tool and writes a caption in a broadcast voice. A validator rejects anything that looks like raw data." |
 | 0:50–1:08 | A goal card arrives. Point at the minute and score | "The Editor, in code, decides what's worth the airtime. Then a Reviewer agent approves, fixes or rejects each card and writes the Spanish in the same call. Every number has to match the facts." |
@@ -68,6 +68,6 @@ Record at 1080p. Use the console in a light theme, at 10× match speed and with 
 
 **Demo URL:** https://thiago-whatever.github.io/calacat-narrator/
 
-**Testing instructions:** No sign-in is needed. See the README's [Testing instructions](../README.md#testing-instructions): demo mode in one click, and a live, agent-narrated match from the Start a match button or one simulator command.
+**Testing instructions:** No sign-in is needed. See the README's [Testing instructions](../README.md#testing-instructions): demo mode in one click, and a live, agent-narrated match from the Start live match button or one simulator command.
 
 **Video:** *(add the YouTube or Vimeo link after uploading; under 2 minutes)*

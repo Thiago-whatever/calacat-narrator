@@ -55,7 +55,7 @@ One screen with no page scroll on desktop (ADR-032). Below ~1100px wide or ~560p
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
-│ ● Calacat Narrator             [▶ Start match] [English ▾] [♿ Access.] │
+│ ● Calacat Narrator             [▶ Play demo]  [English ▾] [♿ Access.] │
 │ ─────────────────────────────────────────────────────────────────────  │
 │ TRANSMISSION  [● TV 1  RÍO 1–0 NOR] [TV 2  SOL 1–1 VAL] [Stream …] 1st │
 ├───────────────────────────────────────────┬───────────────────────────┤
@@ -73,7 +73,7 @@ The monitor's width is capped by viewport height (`(100vh − 284px) × 16/9`) s
 
 ### Header
 
-- Brand, then **Start match / Pause / Resume / Restart** (demo only: drives the simulated clock), language (English / Español), and an **Accessibility** popover (high contrast, larger text, reduce motion, shortcut list).
+- Brand, then **Play demo / Pause demo / Resume demo / Replay demo** (demo only: drives the simulated clock; outlined when **Start live match**, which starts a server match in live builds, is also shown), language (English / Español), and an **Accessibility** popover (high contrast, larger text, reduce motion, shortcut list).
 - Second row: the **Transmission** switcher (ADR-034). One button per output with its name, its match score, and a dot that blinks red when that output has a card on air. Followed by the period pill (Pre-match / 1st half / 2nd half / Full time). Switching is disabled during a countdown.
 
 ### Program monitor

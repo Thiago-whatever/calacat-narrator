@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mergeCards, parseLiveCard, toFeedCard } from './data/live'
 import { onAirState, openOnAirChannel, parseOnAirMessage } from './data/onAirChannel'
 import { readStartResponse, startMessage } from './data/kickoff'
-import { minutes, STRINGS } from './i18n'
+import { fill, minutes, STRINGS } from './i18n'
 import { COUNTDOWN_MS, initialState, reducer, type Action, type ConsoleState } from './state'
 import type { FeedCard } from './types'
 
@@ -190,6 +190,18 @@ describe('start a match (C16)', () => {
   it('shows the busy message with minutes', () => {
     expect(startMessage(STRINGS.en, { status: 'busy', retryMin: 6 })).toBe('Two matches are already running. Try again in 6 min.')
     expect(startMessage(STRINGS.es, { status: 'idle' })).toBe('')
+  })
+})
+
+describe('start hints', () => {
+  it('name the demo and live buttons from their current labels', () => {
+    for (const t of [STRINGS.en, STRINGS.es]) {
+      const hint = fill(t.preHintLive, { demo: t.start, live: t.startMatch })
+      expect(hint).toContain(t.start)
+      expect(hint).toContain(t.startMatch)
+      expect(fill(t.preHint, { demo: t.start })).toContain(t.start)
+      expect(hint).not.toMatch(/\{\w+\}/)
+    }
   })
 })
 

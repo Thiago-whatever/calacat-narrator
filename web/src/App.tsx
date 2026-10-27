@@ -17,7 +17,7 @@ import { MATCH_ID_PATTERN, useLiveSource, type LiveStatus } from './data/live'
 import { onAirState, openOnAirChannel } from './data/onAirChannel'
 import { useDemoSource, type DemoRun } from './data/useDemoSource'
 import { useFeedDrag, useNow, usePrefs } from './hooks'
-import { minutes, STRINGS, topicLabel } from './i18n'
+import { fill, minutes, STRINGS, topicLabel } from './i18n'
 import { clamp, COUNTDOWN_MS, initialState, reducer, SIZES } from './state'
 import { AppThemeProvider } from './theme/AppThemeProvider'
 import type { ThemePrefs } from './theme/theme'
@@ -89,7 +89,7 @@ interface PrefsProps {
 export default function App() {
   const prefs = usePrefs()
   const [liveMatch, setLiveMatch] = useState(liveMatchFromUrl)
-  // "Start a match" (C16) follows the new match in place, so its status message stays on screen.
+  // "Start live match" (C16) follows the new match in place, so its status message stays on screen.
   const { state, start } = useMatchStarter(API_BASE, (id) => {
     window.history.pushState(null, '', `?match=${encodeURIComponent(id)}`)
     setLiveMatch(id)
@@ -347,7 +347,7 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
               away={teams[match.away]}
               score={`${goals(match.id, match.home)}–${goals(match.id, match.away)}`}
               minute={minutes(source.clock)}
-              kickoff={source.phase === 'pre' ? { title: t.kickoff, hint: demo ? t.preHint : t.liveHint } : undefined}
+              kickoff={source.phase === 'pre' ? { title: t.kickoff, hint: demo ? fill(starter ? t.preHintLive : t.preHint, { demo: t.start, live: t.startMatch }) : t.liveHint } : undefined}
               guide={moving.guide}
               drop={drag && { over: drag.over, hint: drag.over ? t.release : t.dragTo }}
             >
