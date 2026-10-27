@@ -1,0 +1,67 @@
+# Builds the Reporter console (web/) and publishes it to GitHub Pages.
+# One-time setup: Settings → Pages → Source: GitHub Actions.
+# Optional live mode: set the repository variable (not a secret) VITE_API_BASE_URL to the
+# Function App's /api URL, e.g. https://fn-calacat.azurewebsites.net/api (ADR-043).
+name: Deploy web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src/calacat_narrator/data/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Least privilege: every job can only read the code. Only `deploy` can publish; `build` runs
+# `npm ci` (dependency install scripts), so it must never hold a Pages or OIDC token.
+permissions:
+  contents: read
+
+# One deployment at a time; never cancel one that is already publishing.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+      # Vite builds for /calacat-narrator/ (vite.config.ts); the API URL comes from a repository variable.
+      - run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

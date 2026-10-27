@@ -70,6 +70,13 @@ and duration produces identical output; `--speed` affects only pacing when posti
 event records to an optional `--ingest-url`. Position samples remain in the output
 file because `/ingest` accepts event envelopes.
 
+`/api/ingest` requires a Function key (`AuthLevel.FUNCTION`). `/api/negotiate` and
+`/api/cards` stay anonymous because they are read-only, and `POST /api/matches` (below) stays
+anonymous because judges use it, behind the running and daily caps. The simulator sends the key as
+`x-functions-key` from the `INGEST_FUNCTION_KEY` environment variable. Get it with
+`az functionapp keys list -g <rg> -n <function-app> --query functionKeys.default -o tsv`
+and keep it in your local environment only, never in the repo or the Pages build.
+
 ### Judge-started matches (C16, ADR-044)
 
 `POST /api/matches` starts a match on the server. The body is optional: `{"speed": 10}`

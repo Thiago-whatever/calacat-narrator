@@ -53,7 +53,9 @@ def _json_response(
     )
 
 
-@app.route(route="ingest", methods=["POST"])
+# Writes drive signals, model calls and broadcast cards, so ingest needs a function key;
+# the read-only /negotiate and /cards stay anonymous for the public console.
+@app.route(route="ingest", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
 def ingest(req: func.HttpRequest) -> func.HttpResponse:
     """Validate one event envelope, then enqueue it to Event Hubs."""
     content_type = req.headers.get("content-type", "").split(";", 1)[0].strip().lower()

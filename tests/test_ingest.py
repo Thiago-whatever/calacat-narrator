@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import azure.functions as func
 import pytest
+from azure.functions.decorators.http import HttpTrigger
 from pydantic import ValidationError
 
 import function_app
@@ -111,3 +112,16 @@ def test_ingest_returns_service_unavailable_when_event_hubs_fails(monkeypatch) -
 
     assert response.status_code == 503
     assert json.loads(response.get_body()) == {"error": "event_hub_unavailable"}
+
+
+def test_only_ingest_requires_a_function_key() -> None:
+    levels = {
+        f.get_function_name(): f.get_trigger().auth_level
+        for f in function_app.app.get_functions()
+        if isinstance(f.get_trigger(), HttpTrigger)
+    }
+    assert levels["ingest"] == func.AuthLevel.FUNCTION
+    # Judges start matches without a key; that route is capped instead (ADR-044).
+    assert (
+        levels["negotiate"] == levels["cards"] == levels["start_match"] == func.AuthLevel.ANONYMOUS
+    )
