@@ -70,6 +70,34 @@ and duration produces identical output; `--speed` affects only pacing when posti
 event records to an optional `--ingest-url`. Position samples remain in the output
 file because `/ingest` accepts event envelopes.
 
+`/api/ingest` requires a Function key (`AuthLevel.FUNCTION`). `/api/negotiate` and
+`/api/cards` stay anonymous because they are read-only, and `POST /api/matches` (below) stays
+anonymous because judges use it, behind the running and daily caps. The simulator sends the key as
+`x-functions-key` from the `INGEST_FUNCTION_KEY` environment variable. Get it with
+`az functionapp keys list -g <rg> -n <function-app> --query functionKeys.default -o tsv`
+and keep it in your local environment only, never in the repo or the Pages build.
+
+### Judge-started matches (C16, ADR-044)
+
+`POST /api/matches` starts a match on the server. The body is optional: `{"speed": 10}`
+(an integer from 5 to 20; unknown fields are rejected), and the console sends none. The server
+picks the seed, so the response is `202 {"match_id": "m-seed-<seed>", "speed": 10, "status":
+"starting"}`. At most 2 matches run at once. When both are running, or a match kicked off
+less than a minute ago, the request joins that match instead: `202 {"match_id": "m-seed-<seed>",
+"status": "joined"}` (the one with the most time left), nothing is queued, and the daily count
+doesn't move. 20 matches start per UTC day; after that the response is `429 {"error":
+"daily_cap", "retry_after_s": n}` with a matching `Retry-After` header (`"busy"` only when a
+request loses an ETag race). An invalid body returns `400`, a body that isn't JSON `415`, and a
+Cosmos failure `503`.
+
+The limits are documents in the `match-state` container under the partition `kickoffs`:
+`slot-0` and `slot-1` hold `{running, started_at, busy_until}`, and `day-YYYY-MM-DD` holds
+`{count}`. All writes are ETag-conditional. The accepted request goes on the `match-kickoffs`
+storage queue; the queue-triggered `run_kickoff` function plays that seed into Event Hubs at its
+speed, like the CLI's `--ingest-url` mode, and the pipeline narrates it like any other match.
+An event that fails to publish is skipped and the match goes on; when the run ends or crashes,
+its slot is released right away (`busy_until` set to now).
+
 ## Signals (Interpreter → Service Bus)
 ```json
 { "signal_id": "...", "match_id": "m-0007", "kind": "goal", "match_clock_s": 4020,

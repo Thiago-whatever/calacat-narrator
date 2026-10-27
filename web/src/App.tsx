@@ -12,6 +12,7 @@ import { EditableCard, StaticCard } from './components/monitor/OnScreenCard'
 import { ProgramMonitor } from './components/monitor/ProgramMonitor'
 import { LiveRegion } from './components/ui/primitives'
 import { Toast } from './components/ui/Toast'
+import { startMessage, useMatchStarter } from './data/kickoff'
 import { MATCH_ID_PATTERN, useLiveSource, type LiveStatus } from './data/live'
 import { onAirState, openOnAirChannel } from './data/onAirChannel'
 import { useDemoSource, type DemoRun } from './data/useDemoSource'
@@ -61,16 +62,36 @@ function Overlay({ lang }: { lang: Lang }) {
   return <OverlayView t={STRINGS[lang]} output={output} onOutput={choose} consoleHref={viewHref(null)} />
 }
 
+interface Starter {
+  busy: boolean
+  message: string
+  onStart: () => void
+}
+
 interface PrefsProps {
   lang: Lang
   setLang: (lang: Lang) => void
   prefs: ThemePrefs
   setPrefs: (prefs: ThemePrefs) => void
+  starter?: Starter
 }
 
 export default function App() {
   const prefs = usePrefs()
-  const liveMatch = liveMatchFromUrl()
+  const [liveMatch, setLiveMatch] = useState(liveMatchFromUrl)
+  // "Start a match" (C16) follows the new match in place, so its status message stays on screen.
+  const { state, start } = useMatchStarter(API_BASE, (id) => {
+    window.history.pushState(null, '', `?match=${encodeURIComponent(id)}`)
+    setLiveMatch(id)
+  })
+  useEffect(() => {
+    const onPop = () => setLiveMatch(liveMatchFromUrl())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+  const starter: Starter | undefined = API_BASE
+    ? { busy: state.status === 'starting', message: startMessage(STRINGS[prefs.lang], state), onStart: start }
+    : undefined
   if (overlayFromUrl()) {
     return (
       <AppThemeProvider prefs={prefs.prefs}>
@@ -80,7 +101,7 @@ export default function App() {
   }
   return (
     <AppThemeProvider prefs={prefs.prefs}>
-      {liveMatch ? <LiveConsole matchId={liveMatch} {...prefs} /> : <DemoConsole {...prefs} />}
+      {liveMatch ? <LiveConsole key={liveMatch} matchId={liveMatch} starter={starter} {...prefs} /> : <DemoConsole starter={starter} {...prefs} />}
     </AppThemeProvider>
   )
 }
@@ -101,7 +122,7 @@ interface ConsoleProps extends PrefsProps {
   liveStatus?: LiveStatus
 }
 
-function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: ConsoleProps) {
+function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, starter }: ConsoleProps) {
   const [s, dispatch] = useReducer(reducer, source.outputs[0].id, initialState)
   const [moving, setMoving] = useState({ moving: false, guide: false })
   const stageRef = useRef<HTMLDivElement>(null)
@@ -292,6 +313,7 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs }: C
         }}
         liveStatus={liveText}
         overlay={{ label: t.openOverlay, href: viewHref(s.output) }}
+        start={starter && { label: t.startMatch, ...starter }}
         outputs={outputs.map((o) => ({ id: o.id, name: o.name, score: scoreLine(o.match), live: !!s.onAir[o.id], disabled: !!s.pending && o.id !== s.output }))}
         output={s.output}
         onOutput={(id) => dispatch({ type: 'setOutput', output: id })}

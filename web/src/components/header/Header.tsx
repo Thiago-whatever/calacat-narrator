@@ -19,6 +19,8 @@ interface Props {
   liveStatus?: string
   /** Opens the overlay view for the selected output in a new tab (C14). */
   overlay: { label: string; href: string }
+  /** Live builds only: starts a match on the server (C16); `message` is its status, announced politely. */
+  start?: { label: string; busy: boolean; message: string; onStart: () => void }
   outputs: OutputOption[]
   output: string
   onOutput: (id: string) => void
@@ -50,7 +52,7 @@ function Brand({ sub }: { sub: string }) {
   )
 }
 
-export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, overlay, outputs, output, onOutput, period }: Props) {
+export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start, overlay, outputs, output, onOutput, period }: Props) {
   return (
     <Box
       component="header"
@@ -74,6 +76,17 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, overl
           <Button variant="contained" onClick={run.onToggle} startIcon={run.running ? <PauseIcon /> : <PlayIcon />} sx={{ minWidth: { sm: 150 }, gridColumn: '1 / -1' }}>
             {run.label}
           </Button>
+        )}
+        {start && (
+          // aria-disabled, not disabled, so keyboard focus stays on the button while it works.
+          <Button variant="contained" onClick={start.busy ? undefined : start.onStart} aria-disabled={start.busy} startIcon={<PlayIcon />} sx={{ gridColumn: '1 / -1' }}>
+            {start.label}
+          </Button>
+        )}
+        {start && (
+          <Typography role="status" sx={{ gridColumn: '1 / -1', fontSize: '.85em', maxWidth: { sm: 260 } }}>
+            {start.message}
+          </Typography>
         )}
         <Button component="a" href={overlay.href} target="_blank" rel="noopener" sx={{ gridColumn: '1 / -1' }}>{overlay.label}</Button>
         {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
