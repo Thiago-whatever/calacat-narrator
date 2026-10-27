@@ -13,11 +13,10 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-# Least privilege: read the code, write only the Pages deployment.
+# Least privilege: every job can only read the code. Only `deploy` can publish; `build` runs
+# `npm ci` (dependency install scripts), so it must never hold a Pages or OIDC token.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # One deployment at a time; never cancel one that is already publishing.
 concurrency:
@@ -41,8 +40,6 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-
       - run: npm ci
       - run: npm run lint
       - run: npm test
@@ -59,6 +56,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
