@@ -207,6 +207,45 @@ async def _submit_fallback_card(
         await receiver.complete_message(message)
 
 
+async def process_message(
+    receiver: ServiceBusReceiver,
+    route: str,
+    message: ServiceBusReceivedMessage,
+    editor: Editor,
+    config: EditorConfig,
+    pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
+    *,
+    now: datetime,
+) -> None:
+    """Route one message; a failure settles that message instead of stopping the Editor.
+
+    The Editor runs as a single replica, and a DLQ message can't be dead-lettered again, so
+    an unhandled error here would crash-loop on the same message and stop every card.
+    """
+    try:
+        if route == "signal_dlq":
+            await process_deadletter_message(receiver, message, editor, config, pending, now=now)
+        elif route == "candidate_dlq":
+            await process_candidate_deadletter_message(
+                receiver, message, editor, config, pending, now=now
+            )
+        else:
+            await process_candidate_message(receiver, message, editor, pending, now=now)
+    except Exception:
+        logger.exception("Editor failed on %s message %s; settling it", route, message.message_id)
+        try:
+            if route in {"signal_dlq", "candidate_dlq"}:
+                await receiver.complete_message(message)
+            else:
+                await receiver.dead_letter_message(
+                    message,
+                    reason="EditorError",
+                    error_description="The Editor raised while processing this message.",
+                )
+        except Exception:
+            logger.exception("Could not settle %s message %s", route, message.message_id)
+
+
 async def consume_editor(
     receivers: list[tuple[ServiceBusReceiver, str]],
     editor: Editor,
@@ -226,18 +265,9 @@ async def consume_editor(
             for (receiver, route), messages in zip(receivers, batches, strict=True):
                 for message in messages:
                     renewer.register(receiver, message)
-                    if route == "signal_dlq":
-                        await process_deadletter_message(
-                            receiver, message, editor, config, pending, now=current
-                        )
-                    elif route == "candidate_dlq":
-                        await process_candidate_deadletter_message(
-                            receiver, message, editor, config, pending, now=current
-                        )
-                    else:
-                        await process_candidate_message(
-                            receiver, message, editor, pending, now=current
-                        )
+                    await process_message(
+                        receiver, route, message, editor, config, pending, now=current
+                    )
 
             for candidate_id in editor.expire_queue(now=current):
                 expired = pending.pop(candidate_id, None)

@@ -297,3 +297,88 @@ def test_stored_card_is_pushed_and_a_failed_push_still_completes(
     assert len(container.documents) == 1
     assert pushed == [container.documents[0]["id"]]
     assert receiver.completed == [message]
+
+
+def unknown_team_signal_json() -> bytes:
+    # Passes the EntityId pattern but isn't in the catalog: the poison message from review.
+    return signal_json().replace(b'"t-home"', b'"t-ghost"')
+
+
+def test_unknown_team_in_dlq_is_completed_instead_of_crashing_the_editor() -> None:
+    receiver = FakeReceiver()
+    message = FakeMessage(unknown_team_signal_json())
+
+    asyncio.run(
+        editor_worker.process_message(
+            receiver,
+            "signal_dlq",
+            message,
+            Editor(EditorConfig.load()),
+            EditorConfig.load(),
+            {},
+            now=datetime(2026, 10, 25, tzinfo=UTC),
+        )
+    )
+
+    # A DLQ message can't be dead-lettered again, so completing it is the only way out.
+    assert receiver.completed == [message]
+    assert receiver.dead_lettered == []
+
+
+@pytest.mark.parametrize(
+    ("route", "processor"),
+    [
+        ("candidate", "process_candidate_message"),
+        ("signal_dlq", "process_deadletter_message"),
+        ("candidate_dlq", "process_candidate_deadletter_message"),
+    ],
+)
+def test_any_processing_error_settles_the_message(
+    monkeypatch: pytest.MonkeyPatch, route: str, processor: str
+) -> None:
+    async def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(editor_worker, processor, boom)
+    receiver = FakeReceiver()
+    message = FakeMessage(b"{}")
+
+    asyncio.run(
+        editor_worker.process_message(
+            receiver,
+            route,
+            message,
+            Editor(EditorConfig.load()),
+            EditorConfig.load(),
+            {},
+            now=datetime(2026, 10, 25, tzinfo=UTC),
+        )
+    )
+
+    if route == "candidate":
+        assert receiver.dead_lettered == [(message, "EditorError")]
+    else:
+        assert receiver.completed == [message]
+
+
+def test_settle_failure_is_logged_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("unexpected")
+
+    class LostLockReceiver(FakeReceiver):
+        async def complete_message(self, message: FakeMessage) -> None:
+            raise RuntimeError("lock lost")
+
+    monkeypatch.setattr(editor_worker, "process_deadletter_message", boom)
+
+    asyncio.run(
+        editor_worker.process_message(
+            LostLockReceiver(),
+            "signal_dlq",
+            FakeMessage(b"{}"),
+            Editor(EditorConfig.load()),
+            EditorConfig.load(),
+            {},
+            now=datetime(2026, 10, 25, tzinfo=UTC),
+        )
+    )
