@@ -1,11 +1,11 @@
 # Progress log
 
-What we're doing, what's done, and what's missing. Setup last checked **2026-10-25** with the CLI commands shown; build checklist last checked **2026-10-26** against `main` and GitHub.
+What we're doing, what's done, and what's missing. Setup last checked **2026-10-27** with the CLI commands shown; build checklist last checked **2026-10-27** against `main` and GitHub.
 
 ## What we're doing
 We're building **Calacat Narrator**, an entry for the Microsoft × Premier League "Inside the Game" hackathon (deadline **Oct 27 2026, 11:59 pm PT**). A simulator plays a fictional football match. Azure moves the events through a pipeline. AI agents turn stats into "did you know?" cards that a TV reporter can put on air and fans can personalize (language, depth, favorite club/player, accessibility). See [README.md](README.md) and [architecture.md](architecture.md).
 
-Right now we're in the **build phase**: the backend pipeline through the Editor (C1–C11) is merged on `main`; next are push-to-browser, the UIs, deploy and submission.
+Right now we're in the **submission phase**. The pipeline, the agents (specialists with the facts tool, Reviewer and Spanish) and the console are merged on `main` (C1–C13, C36–C39). Open PRs: Pages (C40, #61), Start a match (C16, #68), overlay view (C14, #69), CI (C25, #70) and the submission docs (S1). What's left is merging them, a full `azd deploy`, making the repo public, the video and the form ([submission.md](submission.md)).
 
 ## Setup checklist
 | # | Step | Status | Verified with |
@@ -15,12 +15,12 @@ Right now we're in the **build phase**: the backend pipeline through the Editor 
 | 1c | `az login` | ✅ Visual Studio Enterprise Subscription | `az account show -o table` |
 | 1d | `azd auth login` | ✅ Logged in | `azd auth login --check-status` |
 | 1e | `gh auth login` | ✅ Logged in as `Thiago-whatever` (scopes: repo, workflow, read:org, gist) | `gh auth status` |
-| 2 | Register Azure resource providers | ⚠️ **Partly.** Registered: DocumentDB, CognitiveServices, Storage, Insights, KeyVault. **Not registered:** EventHub, ServiceBus, App, Web, SignalRService, OperationalInsights | `az provider show -n <ns> --query registrationState` |
+| 2 | Register Azure resource providers | ✅ All registered, including EventHub, ServiceBus, App, Web, SignalRService, OperationalInsights | `az provider list --query "[?namespace=='Microsoft.App'].registrationState"` |
 | 3a | Resource group `rg-calacat` | ✅ East US 2, Succeeded | `az group show -n rg-calacat` |
 | 3b | Foundry project `calacat-narrator` | ✅ Created. Resource is in **East US** (not East US 2) | `az cognitiveservices account list -g rg-calacat` |
 | 3c | Model deployment `narrator-chat` | ✅ `gpt-5-mini` 2025-08-07, GlobalStandard, 50K TPM, NoAutoUpgrade, DefaultV2, Succeeded (see ADR-030) | `az cognitiveservices account deployment list -g rg-calacat -n calacat-narrator` |
 | 3d | Test call to the model with Entra ID (no key) | ❌ Not yet. Needs the role *Cognitive Services OpenAI User* for your account | — |
-| 4 | Budget alert | ❌ Not created | `az consumption budget list` (empty) |
+| 4 | Budget alert | ✅ `calacat-monthly-budget`, 60 per month | `az consumption budget list` |
 | 5a | GitHub Copilot plan checked | ❌ Unknown (Free or Pro?) | github.com/settings/copilot |
 | 5b | Repo public + secret scanning + push protection | ❌ Repo is **PRIVATE**. Must be public by submission. | `gh repo view --json visibility` |
 
@@ -42,7 +42,7 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 ## Build checklist (from roadmap.md)
 | Item | Status |
 |---|---|
-| Docs: README, architecture, decisions (ADR-001…030), data-model, accessibility, roadmap, delivery | ✅ On `main` (progress + backlog not committed yet) |
+| Docs: README, architecture, decisions (ADR-001…044), data-model, accessibility, roadmap, delivery, progress, backlog | ✅ On `main` (ADR-044 in #68) · submission kit in review |
 | Repo hygiene: `RULES/` case, `.github/copilot-instructions.md`, MIT LICENSE (C1) | ✅ #43 |
 | GitHub issues | ✅ #1–#42 |
 | Event schemas + fictional data (C2) | ✅ #44 |
@@ -56,17 +56,17 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 | MCP stats server (C18) | ❌ |
 | Push cards to browsers (C12) | ✅ |
 | UI: Reporter (C13) | ✅ (`web/`; GitHub Pages deploy pending, ADR-043) |
-| Facts-only realistic simulator (C36) | 🔍 PR #63 (2.8 goals, 27 shots per match over 20 seeds) |
-| Facts tool + validated captions (C37) | 🔍 PR #64, stacked on #63 |
-| Reviewer agent + Spanish (C38) | 🔍 PR #65, stacked on #64 · full `azd deploy` + 10-card review after merge |
-| Console: player, team, minute, avatar, EN/ES (C39) | 🔍 PR #66, stacked on #65 |
-| GitHub Pages receive-only demo, CORS, CSP (C40) | 🔍 PR #61 · needs public repo (G1) and Pages enabled |
-| UI: Overlay (C14), Fan (C15) | ❌ (C14 rewritten as an in-console view, ADR-043) |
-| Kick-off endpoint (C16), FT recap (C17) | ❌ |
-| CI (C25) | ❌ (tests only run locally: 74 passing, ruff clean) |
-| Deploy + smoke test (D1), public repo (G1), submission (S1) | ❌ |
+| Facts-only realistic simulator (C36) | ✅ #63 (2.8 goals, 27 shots per match over 20 seeds) |
+| Facts tool + validated captions (C37) | ✅ #64 |
+| Reviewer agent + Spanish (C38) | ✅ #65 · full `azd deploy` + 10-card review still to do |
+| Console: player, team, minute, avatar, EN/ES (C39) | ✅ #66 |
+| GitHub Pages receive-only demo, CORS, CSP (C40) | ✅ #61 · needs public repo (G1), Pages enabled, and `azd provision` for CORS |
+| UI: Overlay (C14), Fan (C15) | ✅ C14 #69 (in-console view, ADR-043) · C15 ❌ |
+| Kick-off endpoint (C16), FT recap (C17) | ✅ C16 #68 (ADR-044) · needs `azd deploy` · C17 ❌ |
+| CI (C25) | ✅ #70, green on main |
+| Deploy + smoke test (D1), public repo (G1), submission (S1) | ❌ · S1 docs in review ([submission.md](submission.md)) |
 
-**Critical path left:** merge C36 → C37 → C38 → C39 and C40, then a full `azd deploy` (D1) and a 10-card review, G1, S1. It's Oct 26 and the deadline is Oct 27 11:59 pm PT, so treat everything outside that path as optional.
+**Critical path left:** the pre-submit checklist in [submission.md](submission.md): secret scan, repo public (G1), Pages, merge #61 and the open PRs, a full `azd deploy` (D1) with the 10-card review, then the video and the form (S1). The target is Oct 27 noon PT (ADR-042).
 
 ## What Claude has helped with so far
 - Read the hackathon rules and rubric. Flagged the deadline, scope, data-generator, persona, trademark and missing-requirement issues.
