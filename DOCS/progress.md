@@ -60,10 +60,10 @@ az role assignment create --assignee $me --role "Cognitive Services OpenAI User"
 | Facts tool + validated captions (C37) | ✅ #64 |
 | Reviewer agent + Spanish (C38) | ✅ #65 · full `azd deploy` + 10-card review still to do |
 | Console: player, team, minute, avatar, EN/ES (C39) | ✅ #66 |
-| GitHub Pages receive-only demo, CORS, CSP (C40) | 🔍 PR #61 · needs public repo (G1) and Pages enabled |
-| UI: Overlay (C14), Fan (C15) | 🔍 C14 PR #69 (in-console view, ADR-043) · C15 ❌ |
-| Kick-off endpoint (C16), FT recap (C17) | 🔍 C16 PR #68 (ADR-044) · C17 ❌ |
-| CI (C25) | 🔍 PR #70, green on its own PR |
+| GitHub Pages receive-only demo, CORS, CSP (C40) | ✅ #61 · needs public repo (G1), Pages enabled, and `azd provision` for CORS |
+| UI: Overlay (C14), Fan (C15) | ✅ C14 #69 (in-console view, ADR-043) · C15 ❌ |
+| Kick-off endpoint (C16), FT recap (C17) | ✅ C16 #68 (ADR-044) · needs `azd deploy` · C17 ❌ |
+| CI (C25) | ✅ #70, green on main |
 | Deploy + smoke test (D1), public repo (G1), submission (S1) | ❌ · S1 docs in review ([submission.md](submission.md)) |
 
 **Critical path left:** the pre-submit checklist in [submission.md](submission.md): secret scan, repo public (G1), Pages, merge #61 and the open PRs, a full `azd deploy` (D1) with the 10-card review, then the video and the form (S1). The target is Oct 27 noon PT (ADR-042).
