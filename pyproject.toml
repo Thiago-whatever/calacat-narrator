@@ -32,7 +32,8 @@ where = ["src"]
 calacat_narrator = ["data/*.json", "data/*.yaml"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# The repo root holds function_app.py, which the HTTP tests import.
+pythonpath = [".", "src"]
 testpaths = ["tests"]
 
 [tool.ruff]
