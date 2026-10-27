@@ -29,8 +29,9 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # agent-framework-foundry ships pre-releases, hence --pre.
-      - run: pip install --pre -e ".[dev]"
+      # No --pre: it would pull pre-releases of every dependency. agent-framework resolves to
+      # final releases; the one beta (azure-ai-inference) is pinned upstream, which pip allows.
+      - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest -q
 
