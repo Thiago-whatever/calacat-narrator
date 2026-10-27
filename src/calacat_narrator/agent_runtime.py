@@ -120,8 +120,12 @@ def event_facts(
 ) -> dict[str, str]:
     """Describe one event in plain words for agents and templates, in English or Spanish."""
     catalog = _catalog()
-    team = next(t.name for t in catalog.teams if t.id == team_id)
-    opponent = next(t.name for t in catalog.teams if t.id != team_id)
+    # IDs only pass the EntityId pattern upstream, so an unknown one is a bad message, not a bug:
+    # raise ValueError (which workers settle) instead of letting StopIteration escape.
+    team = next((t.name for t in catalog.teams if t.id == team_id), None)
+    opponent = next((t.name for t in catalog.teams if t.id != team_id), None)
+    if team is None or opponent is None:
+        raise ValueError(f"unknown team_id {team_id!r}")
     player = next((p.name for p in catalog.players if p.id == player_id), None)
 
     facts = {
@@ -164,7 +168,10 @@ def signal_team_id(signal: Signal) -> str:
     if team_id := signal.entity.get("team_id"):
         return team_id
     player_id = signal.entity["player_id"]
-    return next(p.club_id for p in _catalog().players if p.id == player_id)
+    club_id = next((p.club_id for p in _catalog().players if p.id == player_id), None)
+    if club_id is None:
+        raise ValueError(f"unknown player_id {player_id!r}")
+    return club_id
 
 
 def signal_player_id(signal: Signal) -> str | None:

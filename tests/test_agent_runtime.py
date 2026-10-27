@@ -7,14 +7,20 @@ import pytest
 from pydantic import ValidationError
 
 from calacat_narrator.agent_runtime import (
+    BODY_MAX,
+    HEADLINE_MAX,
     Candidate,
     CandidateDraft,
     Card,
     FoundryCandidateGenerator,
+    _catalog,
     broadcast_minute,
+    event_facts,
     signal_facts,
+    signal_team_id,
     validate_caption,
 )
+from calacat_narrator.editor import template_caption
 from calacat_narrator.signals import PassEventContext, ShotEventContext, Signal
 
 
@@ -283,3 +289,41 @@ def test_card_rejects_expiry_that_does_not_match_ttl() -> None:
 
     with pytest.raises(ValueError, match="TTL"):
         Card.model_validate(values)
+
+
+def test_unknown_team_or_player_raises_value_error_not_stop_iteration() -> None:
+    with pytest.raises(ValueError, match="unknown team_id"):
+        event_facts(kind="goal", value=1, clock_s=600, team_id="t-ghost")
+    ghost_player = Signal(
+        signal_id="signal-ghost",
+        match_id="m-0007",
+        kind="pass_streak",
+        match_clock_s=600,
+        entity={"player_id": "p-ghost"},
+        value=8,
+        evidence_event_ids=["evt-1"],
+        tier=2,
+    )
+    with pytest.raises(ValueError, match="unknown player_id"):
+        signal_team_id(ghost_player)
+
+
+@pytest.mark.parametrize("clock_s", [600, 3600])
+@pytest.mark.parametrize("kind", ["goal", "penalty", "red_card", "shot_volume", "pass_streak"])
+def test_template_captions_pass_validation_for_every_catalog_name(kind: str, clock_s: int) -> None:
+    """A catalog name that trips the leak validator would fail every fallback for that player."""
+    catalog = _catalog()
+    for player in catalog.players:
+        facts = event_facts(
+            kind=kind,
+            value=12,
+            clock_s=clock_s,
+            team_id=player.club_id,
+            player_id=player.id,
+            score={team.id: 2 for team in catalog.teams},
+            speed_kmh=104,
+            body_part="head",
+        )
+        headline, body = template_caption(kind, facts)
+        assert validate_caption(headline) and len(headline) <= HEADLINE_MAX, (player.id, headline)
+        assert validate_caption(body) and len(body) <= BODY_MAX, (player.id, body)
