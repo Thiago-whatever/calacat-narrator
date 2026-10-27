@@ -74,15 +74,15 @@ No sign-in is needed. The console is a **receive-only demo build**, not a produc
 
 ### 1. The console in demo mode
 1. Open https://thiago-whatever.github.io/calacat-narrator/.
-2. Press **Start match**. A scripted feed of insight cards plays on the right.
+2. Press **Play demo**. A scripted feed of insight cards plays on the right.
 3. Click a card (or press J/K, then Enter) to place it on the program monitor. You can drag it, resize it or edit its text.
 4. Press **Go live on TV 1**. A 5-second countdown runs, which you can cancel; then the card is on air. **Pull from air** (or Esc) removes it.
 5. Switch between TV 1, TV 2 and Stream; each output holds its own on-air card.
-6. Press **Open overlay** for a tab that shows only the on-air card for one output.
+6. Press **Open on-air output** for a tab that shows what viewers of one output see: only the card on air, with an ON AIR / OFF AIR tally. The **ⓘ** button in the header explains the demo, the live match and these steps.
 7. Try **EN / ES**, and the **Accessibility** menu: high contrast, larger text, reduced motion and keyboard shortcuts.
 
 ### 2. A live match narrated by the agents
-**On the hosted console: the Start a match button.** *TODO (C16, PR #68, merged): once deployed, a **Start a match** button appears on the Pages console. It starts a match on the server and switches the console to it. At most 2 matches run at once.* This is the only live path on the hosted demo: posting events to `/api/ingest` needs a Function key, which isn't published.
+**On the hosted console: the Start live match button.** *TODO (C16, PR #68, merged): once deployed, a **Start live match** button appears on the Pages console. It starts a match on the server and switches the console to it. At most 2 matches run at once.* This is the only live path on the hosted demo: posting events to `/api/ingest` needs a Function key, which isn't published.
 
 **In your own Azure subscription: run the simulator.** You need Python 3.12 and the Azure Developer CLI. Deploy everything with `azd up` (see [delivery](DOCS/delivery.md)), then read your own Function key and point the simulator at your own Function App:
 ```bash

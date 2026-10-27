@@ -55,7 +55,7 @@ One screen with no page scroll on desktop (ADR-032). Below ~1100px wide or ~560p
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
-│ ● Calacat Narrator             [▶ Start match] [English ▾] [♿ Access.] │
+│ ● Calacat Narrator             [▶ Play demo]  [English ▾] [♿ Access.] │
 │ ─────────────────────────────────────────────────────────────────────  │
 │ TRANSMISSION  [● TV 1  RÍO 1–0 NOR] [TV 2  SOL 1–1 VAL] [Stream …] 1st │
 ├───────────────────────────────────────────┬───────────────────────────┤
@@ -73,7 +73,7 @@ The monitor's width is capped by viewport height (`(100vh − 284px) × 16/9`) s
 
 ### Header
 
-- Brand, then **Start match / Pause / Resume / Restart** (demo only: drives the simulated clock), language (English / Español), and an **Accessibility** popover (high contrast, larger text, reduce motion, shortcut list).
+- Brand, then **Play demo / Pause demo / Resume demo / Replay demo** (demo only: drives the simulated clock; outlined when **Start live match**, which starts a server match in live builds, is also shown), language (English / Español), and an **Accessibility** popover (high contrast, larger text, reduce motion, shortcut list).
 - Second row: the **Transmission** switcher (ADR-034). One button per output with its name, its match score, and a dot that blinks red when that output has a card on air. Followed by the period pill (Pre-match / 1st half / 2nd half / Full time). Switching is disabled during a countdown.
 
 ### Program monitor
@@ -120,6 +120,17 @@ A success toast ("Card is live on TV 1", with Pull) appears bottom-right over th
 - **Focus** select (teams and players): when set, the feed shows **only** cards about that team or player (ADR-034).
 - Card anatomy: neutral team chip, topic pill (goals in magenta), minute, `New` / `Live · TV 1, Stream` pills; silhouette with jersey number (player cards) or team shield (team cards); player line; headline; body; specialist name, match score (in All games), salience bar with the number.
 - Click previews the card on the monitor; drag it with a ghost onto any point of the monitor. A card that is live on the selected output is locked (not clickable or draggable, `aria-disabled`).
+
+### Getting started
+
+- An **ⓘ How it works** button sits after the Accessibility button. It opens a dialog explaining the demo (scripted, in the browser, instant) and, when the API is configured, the live match (simulated on the server, written by the agents, first cards within a minute), followed by the four steps to put a card on air. It opens by itself on a first visit only (remembered per browser); Esc or **Got it** closes it.
+
+### On-air output
+
+- **Open on-air output** opens `?overlay=<output>` in a new tab: what viewers of that transmission get, never an editing surface. The console is titled **Control room** so the two are never confused.
+- Its title row says **On-air output · TV 1** with a **What viewers see** tag; the transmission switcher, **Back to control room** and the Accessibility menu sit on their own row below it, so a longer output name never moves them.
+- A tally strip above the stage reads **ON AIR · TV 1** in red with the headline, or **OFF AIR · TV 1** in grey; the stage gets a red frame while on air. A note below repeats that nothing here can be edited.
+- The output is always in English, whatever language the console uses: the page itself, and the card (the reporter's English edit if there is one, else the English text).
 
 ## Accessibility
 

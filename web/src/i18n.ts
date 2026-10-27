@@ -23,6 +23,10 @@ export function topicLabel(t: Strings, topic: string): string {
 const HALF_TIME_S = 45 * 60
 
 /** On-air minute, matching the backend's `broadcast_minute`: 0:00-0:59 is 1', capped at 45' and 90'. */
+/** Fills `{name}` slots, so text naming a button always matches the button's current label. */
+export const fill = (text: string, values: Record<string, string>) =>
+  text.replace(/\{(\w+)\}/g, (slot, name: string) => values[name] ?? slot)
+
 export const minutes = (seconds: number) => {
   const minute = Math.floor(seconds / 60) + 1
   return `${Math.min(minute, seconds < HALF_TIME_S ? 45 : 90)}’`

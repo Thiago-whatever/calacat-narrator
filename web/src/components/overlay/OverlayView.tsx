@@ -3,8 +3,10 @@ import { styled } from '@mui/material/styles'
 import { useEffect, useRef, useState } from 'react'
 import { openOnAirChannel, type OverlayCard, type OverlayOutput } from '../../data/onAirChannel'
 import type { Strings } from '../../i18n'
+import type { ThemePrefs } from '../../theme/theme'
+import { AccessibilityMenu } from '../header/AccessibilityMenu'
 import { StaticCard } from '../monitor/OnScreenCard'
-import { LiveRegion } from '../ui/primitives'
+import { LiveRegion, Pill, StatusDot } from '../ui/primitives'
 import { SegmentedControl } from '../ui/SegmentedControl'
 
 // Before the console answers, the overlay still offers the demo's outputs.
@@ -14,20 +16,46 @@ const DEFAULT_OUTPUTS: OverlayOutput[] = [
   { id: 'o3', name: 'Stream' },
 ]
 
-/** Program-sized key: only the on-air card is drawn on it, scaled like the console's monitor (cqw). */
-const Stage = styled('div')(({ theme }) => ({
+// Room left for the header, tally strip and note, so the 16:9 stage fits the window's height.
+const STAGE_WIDTH = 'min(100%, calc((100dvh - 270px) * 16 / 9))'
+
+/** Program-sized key: only the on-air card is drawn on it, scaled like the console's monitor (cqw). Red-framed while on air. */
+const Stage = styled('div', { shouldForwardProp: (p) => p !== 'live' })<{ live: boolean }>(({ theme, live }) => ({
   position: 'relative',
   aspectRatio: '16 / 9',
-  width: 'min(100%, calc((100dvh - 120px) * 16 / 9))',
+  width: STAGE_WIDTH,
   margin: '0 auto',
   overflow: 'hidden',
   borderRadius: theme.custom.radii.card,
   background: theme.custom.colors.stage,
   containerType: 'inline-size',
+  outline: `4px solid ${live ? theme.custom.colors.live : 'transparent'}`,
+  outlineOffset: 3,
 }))
+
+/** Broadcast tally above the stage: ON AIR in red, or OFF AIR, with what is showing. */
+function TallyStrip({ live, label, detail }: { live: boolean; label: string; detail: string }) {
+  return (
+    <Box
+      sx={(theme) => ({
+        width: STAGE_WIDTH, mx: 'auto', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', p: '8px 14px',
+        borderRadius: `${theme.custom.radii.panel}px`, color: theme.custom.colors.onBrand,
+        background: live ? theme.custom.colors.live : theme.custom.colors.tallyOff,
+      })}
+    >
+      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+        <StatusDot blink={live} />
+        {label}
+      </Box>
+      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: '1 1 12em' }}>{detail}</Box>
+    </Box>
+  )
+}
 
 interface Props {
   t: Strings
+  prefs: ThemePrefs
+  onPrefs: (prefs: ThemePrefs) => void
   output: string
   onOutput: (id: string) => void
   consoleHref: string
@@ -35,9 +63,10 @@ interface Props {
 
 /**
  * Overlay view (C14, ADR-043): the card on air for one output, fed by the console in another tab of
- * this browser. Nothing goes over the network; it resets when the console reloads.
+ * this browser. Nothing goes over the network; it resets when the console reloads. It is the viewers'
+ * side, so it says so: a "what viewers see" tag, a broadcast tally and no editing controls.
  */
-export function OverlayView({ t, output, onOutput, consoleHref }: Props) {
+export function OverlayView({ t, prefs, onPrefs, output, onOutput, consoleHref }: Props) {
   const [outputs, setOutputs] = useState(DEFAULT_OUTPUTS)
   const [onAir, setOnAir] = useState<Record<string, OverlayCard | null>>({})
   const [announce, setAnnounce] = useState('')
@@ -73,18 +102,34 @@ export function OverlayView({ t, output, onOutput, consoleHref }: Props) {
       })}
     >
       <LiveRegion politeness="polite">{announce}</LiveRegion>
-      <Box component="header" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px 24px' }}>
-        <Typography variant="display" component="h1" sx={{ fontSize: '1.4em', m: 0 }}>
-          {t.overlay} · {name}
-        </Typography>
-        <SegmentedControl label={t.output} compact segments={outputs.map((o) => ({ value: o.id, label: o.name }))} value={output} onChange={onOutput} />
-        <Typography sx={{ color: 'text.secondary', fontSize: '.9em' }}>{air ? t.onAir : t.overlayEmpty}</Typography>
-        <Button component="a" href={consoleHref} sx={{ ml: { sm: 'auto' } }}>{t.backToConsole}</Button>
+      {/* Title on its own row, so a longer output name never shifts the controls below it. */}
+      <Box component="header" sx={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px' }}>
+          <Typography variant="display" component="h1" sx={{ fontSize: '1.4em', m: 0 }}>
+            {t.overlay} · {name}
+          </Typography>
+          <Pill tone="hot" label={t.overlayTag} />
+        </Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 24px' }}>
+          <SegmentedControl label={t.output} compact segments={outputs.map((o) => ({ value: o.id, label: o.name }))} value={output} onChange={onOutput} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', ml: { sm: 'auto' } }}>
+            <Button component="a" href={consoleHref}>{t.backToConsole}</Button>
+            <AccessibilityMenu
+              label={t.a11y}
+              options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
+              shortcuts={t.shortcuts}
+              prefs={prefs}
+              onChange={onPrefs}
+            />
+          </Box>
+        </Box>
       </Box>
       <main>
-        <Stage aria-label={`${t.overlay} · ${name}`} role="region">
+        <TallyStrip live={!!air} label={`${air ? t.onAir : t.offAir} · ${name}`} detail={air ? air.text.h : t.overlayEmpty} />
+        <Stage live={!!air} aria-label={`${t.overlay} · ${name}`} role="region" sx={{ mt: '14px' }}>
           {air && <StaticCard card={air.card} team={air.team} geo={air.geo} text={air.text} mode="live" badge={t.bLive} t={t} />}
         </Stage>
+        <Typography variant="hint" sx={{ width: STAGE_WIDTH, mx: 'auto', mt: '12px', display: 'block' }}>{t.overlayNote}</Typography>
       </main>
     </Box>
   )

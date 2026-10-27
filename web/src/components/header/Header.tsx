@@ -6,6 +6,7 @@ import { LogoIcon, PauseIcon, PlayIcon } from '../ui/icons'
 import { Pill } from '../ui/primitives'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { AccessibilityMenu } from './AccessibilityMenu'
+import { HelpDialog } from './HelpDialog'
 import { OutputSwitcher, type OutputOption } from './OutputSwitcher'
 
 interface Props {
@@ -73,7 +74,8 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
         }}
       >
         {run && (
-          <Button variant="contained" onClick={run.onToggle} startIcon={run.running ? <PauseIcon /> : <PlayIcon />} sx={{ minWidth: { sm: 150 }, gridColumn: '1 / -1' }}>
+          // Next to Start live match, the demo is the secondary action, so the two never look alike.
+          <Button variant={start ? 'outlined' : 'contained'} onClick={run.onToggle} startIcon={run.running ? <PauseIcon /> : <PlayIcon />} sx={{ minWidth: { sm: 150 }, gridColumn: '1 / -1' }}>
             {run.label}
           </Button>
         )}
@@ -91,13 +93,22 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
         <Button component="a" href={overlay.href} target="_blank" rel="noopener" sx={{ gridColumn: '1 / -1' }}>{overlay.label}</Button>
         {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
         <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
-        <AccessibilityMenu
-          label={t.a11y}
-          options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
-          shortcuts={t.shortcuts}
-          prefs={prefs}
-          onChange={onPrefs}
-        />
+        <Box sx={{ display: 'flex', gap: '10px', justifySelf: 'end' }}>
+          <AccessibilityMenu
+            label={t.a11y}
+            options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
+            shortcuts={t.shortcuts}
+            prefs={prefs}
+            onChange={onPrefs}
+          />
+          <HelpDialog
+            t={t}
+            demo={run && t.start}
+            live={start && t.startMatch}
+            goLive={`${t.goLive} ${outputs.find((o) => o.id === output)?.name ?? ''}`.trim()}
+            overlay={overlay.label}
+          />
+        </Box>
       </Box>
     </Box>
   )

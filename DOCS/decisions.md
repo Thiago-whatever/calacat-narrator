@@ -318,3 +318,9 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - This is the first anonymous write. Joining limits a click loop to about one new match per minute while a slot is free, but a patient script can still use up the day's 20 matches.
 - **Revisit when:** Matches need to survive restarts, or the daily cap is regularly hit by abuse. Then use a Durable Functions orchestration or a Container Apps job, and add a per-client rate limit.
 
+
+## ADR-045 — Reviewer timeouts: 12 s for critical cards, 15 s for the rest
+- **Decision:** `critical_review_timeout_s` goes from 3 to 12 and `review_timeout_s` from 10 to 15 (`editor.yaml`). Critical topics still get the shorter limit. The fact check also rejects a review whose Spanish headline is the English one, so that card gets the translated template instead.
+- **Why:** In the first live match after ADR-039 was deployed (`m-seed-2003744889`), every goal and penalty card timed out in review at 3 s and went out as a template, and one shot-volume card timed out at 10 s. One Reviewer call writes both languages with gpt-5-mini and needs more time. One approved card also kept an English headline in its Spanish text.
+- **How it could be wrong:** A goal card can now reach the console up to about 12 s later than with the template. Under heavier model load, 12 s may still not be enough, and the template still covers that.
+- **Revisit when:** Goal cards still fall back often, or the delay is noticeable on air. Then send the template to air at once and replace it with the reviewed card when it's ready.
