@@ -18,13 +18,16 @@ Do these in order. Each one depends on the step before it.
 4. **Set up Pages.**
    - Settings → Pages → Source: **GitHub Actions**.
    - Settings → Secrets and variables → Actions → **Variables**: `VITE_API_BASE_URL` = `https://fn-calacatdevzehkqyrl.azurewebsites.net/api`. It's a variable, not a secret.
-5. **Merge #61** (C40, the Pages workflow). The workflow builds and publishes the console. Then merge C16 (#68), C14 (#69) and C25 (#70) if they're approved, and the README/submission docs PR. Run `azd deploy` after C16 so `POST /api/matches` exists.
-6. **Logged-out check**, in a private window with no GitHub session:
+5. **Merge #61** (C40, the Pages workflow). The workflow builds and publishes the console. Then merge C16 (#68), C14 (#69) and C25 (#70) if they're approved, and the README/submission docs PR.
+6. **Deploy once, after all the merges and before the logged-out check:** run `azd provision` then `azd deploy` (or `azd up`). Several merged changes only take effect in Azure after a deploy:
+   - `azd provision`: the CORS rule for the Pages origin (`webConsoleOrigin`, #61). Without it the Pages console can't call `/api/negotiate` or `/api/cards`.
+   - `azd deploy`: the Function key on `/api/ingest` (#61) and `POST /api/matches` (C16, #68) are Function code.
+7. **Logged-out check**, in a private window with no GitHub session:
    - The repo page and README load. The Mermaid diagram renders.
    - https://thiago-whatever.github.io/calacat-narrator/ loads. Start match → go live → pull works, and Open overlay works.
-   - A live match shows cards. Use Start a match, or the simulator command from the README with a new seed, and open `?match=m-seed-<seed>`.
+   - A live match shows cards. Use **Start a match** (the judges' path). The README's simulator option needs your Function key, so it only works for you or in a reader's own subscription.
    - The video link plays without signing in.
-7. **Submit** the form with the text below. Then remove the TODO in the README if C16 is live.
+8. **Submit** the form with the text below. Then remove the TODO in the README if C16 is live.
 
 ## Demo video script (≈ 1:50)
 

@@ -82,22 +82,22 @@ No sign-in is needed. The console is a **receive-only demo build**, not a produc
 7. Try **EN / ES**, and the **Accessibility** menu: high contrast, larger text, reduced motion and keyboard shortcuts.
 
 ### 2. A live match narrated by the agents
-**Option A: the console's button.** *TODO (C16, PR #68): once merged and deployed, a **Start a match** button appears on the Pages console. It starts a match on the server and switches the console to it. At most 2 matches run at once.*
+**On the hosted console: the Start a match button.** *TODO (C16, PR #68): once merged and deployed, a **Start a match** button appears on the Pages console. It starts a match on the server and switches the console to it. At most 2 matches run at once.* This is the only live path on the hosted demo: posting events to `/api/ingest` needs a Function key, which isn't published.
 
-**Option B: run the simulator yourself.** You need Python 3.12.
+**In your own Azure subscription: run the simulator.** You need Python 3.12 and the Azure Developer CLI. Deploy everything with `azd up` (see [delivery](DOCS/delivery.md)), then read your own Function key and point the simulator at your own Function App:
 ```bash
 git clone https://github.com/Thiago-whatever/calacat-narrator && cd calacat-narrator
-pip install --pre -e .
-python -m calacat_narrator.simulator --seed 48213 --speed 10 --output match.jsonl --ingest-url https://fn-calacatdevzehkqyrl.azurewebsites.net/api/ingest
+pip install -e .
+azd up
+export INGEST_FUNCTION_KEY="$(az functionapp keys list -g <your-resource-group> -n <your-function-app> --query functionKeys.default -o tsv)"
+python -m calacat_narrator.simulator --seed 48213 --speed 10 --output match.jsonl --ingest-url https://<your-function-app>.azurewebsites.net/api/ingest
 ```
-While it runs, about 9 minutes at 10× speed, open https://thiago-whatever.github.io/calacat-narrator/?match=m-seed-48213. The match ID is `m-seed-<seed>`. Use a seed nobody has used: a replayed seed's events are recognized as duplicates and produce no new cards. The first cards arrive within a minute of kick-off.
-
-To run everything in your own Azure subscription instead: `azd up` (see [delivery](DOCS/delivery.md)).
+The simulator reads the key from `INGEST_FUNCTION_KEY` only (never a flag), so keep it in your shell environment. While it runs, about 9 minutes at 10× speed, open your console with `?match=m-seed-48213`. The match ID is `m-seed-<seed>`. Use a seed nobody has used: a replayed seed's events are recognized as duplicates and produce no new cards. The first cards arrive within a minute of kick-off.
 
 ## Development
 
 ```bash
-pip install --pre -e ".[dev]"
+pip install -e ".[dev]"
 ruff check . && pytest
 cd web && npm ci && npm test && npm run lint && npm run build
 ```
