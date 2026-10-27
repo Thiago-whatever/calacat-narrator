@@ -121,4 +121,7 @@ def test_only_ingest_requires_a_function_key() -> None:
         if isinstance(f.get_trigger(), HttpTrigger)
     }
     assert levels["ingest"] == func.AuthLevel.FUNCTION
-    assert levels["negotiate"] == levels["cards"] == func.AuthLevel.ANONYMOUS
+    # Judges start matches without a key; that route is capped instead (ADR-044).
+    assert (
+        levels["negotiate"] == levels["cards"] == levels["start_match"] == func.AuthLevel.ANONYMOUS
+    )

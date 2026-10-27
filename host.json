@@ -7,6 +7,9 @@
   "extensions": {
     "http": {
       "routePrefix": "api"
+    },
+    "queues": {
+      "maxDequeueCount": 1
     }
   }
 }
