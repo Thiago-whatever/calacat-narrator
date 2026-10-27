@@ -404,7 +404,7 @@ _NUMBER = re.compile(r"\d+")
 
 
 def check_against_facts(card: Card, facts: dict[str, str]) -> None:
-    """Every number must come from the facts, and each body must give the minute."""
+    """Numbers come from the facts, each body gives the minute, and the Spanish is translated."""
     if card.i18n is None:
         raise ValueError("reviewed card has no Spanish text")
     allowed = set(_NUMBER.findall(" ".join(facts.values())))
@@ -413,6 +413,8 @@ def check_against_facts(card: Card, facts: dict[str, str]) -> None:
         raise ValueError(f"reviewed text has numbers not in the facts: {sorted(unknown)}")
     if facts["minute"] not in card.body or facts["minute"] not in card.i18n.es.body:
         raise ValueError("reviewed text must give the minute in both languages")
+    if card.i18n.es.headline.strip().casefold() == card.headline.strip().casefold():
+        raise ValueError("reviewed Spanish headline is still the English one")
 
 
 async def review_card(

@@ -246,14 +246,17 @@ def specialist_goal_card() -> Card:
 
 
 def decision(
-    kind: str, *, body: str = "68' Bram Elsen scores with a 104 km/h strike. It's 2-0."
+    kind: str,
+    *,
+    body: str = "68' Bram Elsen scores with a 104 km/h strike. It's 2-0.",
+    es_headline: str = "Bram Elsen amplía la ventaja",
 ) -> ReviewDecision:
     return ReviewDecision(
         decision=kind,
         headline="Bram Elsen doubles the lead",
         body=body,
         es=LocalizedCaption(
-            headline="Bram Elsen amplía la ventaja",
+            headline=es_headline,
             body="68' Bram Elsen marca con un remate a 104 km/h. Va 2-0.",
         ),
     )
@@ -338,8 +341,9 @@ def test_reviewer_sees_the_body_part_stored_on_the_card() -> None:
         FakeReviewer(error=ValueError("response did not match the schema")),
         FakeReviewer(decision("approve", body="68' Bram Elsen scores. It's 3-0.")),
         FakeReviewer("not a decision"),
+        FakeReviewer(decision("approve", es_headline="Bram Elsen doubles the lead")),
     ],
-    ids=["timeout", "error", "invalid-output", "wrong-number", "wrong-type"],
+    ids=["timeout", "error", "invalid-output", "wrong-number", "wrong-type", "untranslated"],
 )
 def test_reviewer_failures_publish_the_bilingual_fallback(reviewer: FakeReviewer) -> None:
     card = review(reviewer, timeout_s=0.05)
