@@ -18,6 +18,10 @@ npm run build    # static site in dist/
   (unexpired cards plus the interpreter's score) on every connect and every 30 s. Cards are deduplicated by `card_id`,
   and expired ones leave the feed and can't be sent to air.
   Teams and players come from the backend catalog in `src/calacat_narrator/data/`.
+- **Local against Azure**: create `web/.env.local` with `VITE_API_BASE_URL=/api` and
+  `API_PROXY_TARGET=https://<function-app-host>`, run `npm run dev`, and open `http://localhost:5173/?match=<match_id>`.
+  The dev server forwards `/api/*` to the Function App, so no CORS is needed. Then play a match into Azure with the
+  simulator (`--ingest-url https://<function-app-host>/api/ingest`) using the same match ID (`m-seed-<seed>`).
 
 ## Hosting
 

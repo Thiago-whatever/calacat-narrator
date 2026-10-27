@@ -246,8 +246,64 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **How it could be wrong:** Similar team palettes (two blues) lose their distinction in a small silhouette.
 - **Revisit when:** Real fixtures include clashing kits; then add a second kit color or pattern.
 
-## ADR-036 — Reporter console on Static Web Apps with a linked backend and the `reporter` role
+## ADR-036 — Reporter console on Static Web Apps with a linked backend and the `reporter` role (*Superseded by ADR-043*)
 - **Decision:** Host `web/` on Azure Static Web Apps with the Function App as a linked backend, so the console calls `/api/*` on its own origin (`host.json` `routePrefix` is `api`). `staticwebapp.config.json` restricts every route to a `reporter` role (built-in auth, invitations), redirects `401` to sign-in, and sets a CSP of `'self'` plus `wss://*.webpubsub.azure.com` with `frame-ancestors 'none'`. Fonts are bundled, so nothing loads from a third party. When C14 broadcasts go-live, its endpoint checks the `reporter` role in `x-ms-client-principal` itself, not just the SWA route; the public overlay (C14) gets its own anonymous route.
 - **Why:** Same-origin removes CORS and per-environment API URLs. The console is an operator surface: once go-live reaches the overlay, anyone with the URL could otherwise put text on air. A strict CSP limits what injected content could reach, and self-hosted fonts keep working on locked-down broadcast networks.
 - **How it could be wrong:** Linked backends need the Standard SKU, and judges need an invitation to the role. Emotion's inline styles force `style-src 'unsafe-inline'`.
 - **Revisit when:** Inviting reviewers becomes friction (add a read-only demo route), or Emotion gets a CSP nonce.
+
+## ADR-037 — Facts-only event stream; realistic simulator calibrated by fact checks
+- **Decision:** The simulator acts like a camera: it emits only observable facts (who, where, when, outcome, speed, body part). Derived opinions such as `xg`, pass `difficulty` and `inside_opp_shape` are removed from event payloads and are either computed downstream by the Interpreter or dropped. The simulator may still use internal probabilities to decide outcomes, but never emits them. Realism fixes: the ball can move backwards; incomplete passes and passes out of play hand possession to the opponent (throw-in or corner); shot frequency depends on distance; kickoff goes to the conceding team; a foul in the box can become a penalty; a goalkeeper save follows only `saved` shots. Unit checks over ~20 seeds × 90 min: 2.2–3.4 goals/match (none above 8), 18–32 shots/match, ≥150 possession changes/match, ≥1 penalty across seeds, same seed gives the same match, every event passes its schema. Amends ADR-002 and the payload table in data-model.md.
+- **Why:** Measured over 20 seeds, the simulator produced 20.3 goals, 83 shots and 0.38 mean xG per shot per match, against real values of about 2.8, 25 and 0.10. Goal cards drowned out everything else, and the `penalty` signal could never fire. Keeping the stream to pure facts separates "what happened" from "what it means", which is the Interpreter's and the agents' job and is easier to test.
+- **How it could be wrong:** Dropping `difficulty` and `inside_opp_shape` loses the brief's "pass difficulty rating" unless the Interpreter recomputes it from positions. Calibrating to averages can still produce dull or odd individual matches.
+- **Revisit when:** Pass-quality cards are needed for the demo (then compute difficulty in the Interpreter from distance, pressure and positions), or the checks pass but replays still look unrealistic.
+
+## ADR-038 — Specialists query a facts tool and return structured JSON
+- **Decision:** Specialists no longer receive raw signal JSON in the prompt. Each one gets a single function tool, `get_event_facts`, that returns human-readable facts built in code from the catalog and match state: minute and half, team and opponent names, player name, score after the event, what happened, and speed/body part as phrases. No IDs and no internal field names. The model returns `{headline ≤60, description ≤180, player_id, team_id, salience}`. The application attaches signal, evidence and metrics, so the model can't change provenance. A validator rejects snake_case tokens, IDs and words like `match_clock` or `evidence`; a rejected draft goes through the existing retry/fallback path. The tool starts in-process and can later move into the MCP server (ADR-009) without changing the agents.
+- **Why:** Live cards read like debug output ("PERIOD 2 GOAL (MATCH_CLOCK_S 3741)") because the model only saw field names and wasn't allowed to use names. An agent that queries for context matches the intended event-driven design: wake on a signal, look up the facts, write. The length limits match the console (60/180), so nothing gets truncated.
+- **How it could be wrong:** A tool call adds a round trip and latency. The model may skip the tool and write from the signal alone (mitigated by not putting the signal in the prompt).
+- **Revisit when:** Card latency p95 goes over ~5 s (then pass the facts directly in the prompt), or the MCP server lands.
+
+## ADR-039 — Editor = code budget, then a Reviewer agent (approve / revise / reject)
+- **Decision:** The Editor keeps its deterministic salience, rate limit, TTL and dedupe (ADR-008). A candidate that wins a slot then goes to a **Reviewer** agent, which returns `approve | revise | reject` with final text that must obey the same schema and validator. A timeout, error or invalid output publishes the existing templated fallback card; a reject drops the card and frees the slot. Only reviewed or fallback cards are stored and pushed.
+- **Why:** It's a real second agent with a distinct role (critic/editor) and a handoff, and the system recovers when it fails, which is what the Multi-Agent category judges. Running it only after the budget limits calls to about one every 20–30 s, keeping cost and latency low.
+- **How it could be wrong:** It adds a model call before every card, which could delay goal cards. The Reviewer could reject too often and leave the feed empty.
+- **Revisit when:** Goal cards take more than ~5 s (then skip review for critical topics and review afterwards), or the reject rate goes over ~30%.
+
+## ADR-040 — Translation happens in the Reviewer call; cards carry EN + ES
+- **Decision:** English is the canonical card language. When the Reviewer approves or revises, the same call also returns Spanish text, stored as `i18n.es = {headline, description}` in the card. The UI picks the viewer's language, and audio mode reads the same field. Names, numbers and the minute come from the facts tool, and the validator checks the translated text too. Fallback cards use templates in both languages. Supersedes accessibility.md's "agent writes natively in each target language" for the MVP.
+- **Why:** It costs one call for both review and translation, with no extra service or on-demand endpoint, and the card arrives at the UI ready in both languages over the existing Web PubSub push.
+- **How it could be wrong:** Each extra language makes the Reviewer output bigger and slower. Spanish quality from `gpt-5-mini` is unverified (ADR-030).
+- **Revisit when:** A third language is needed (then add an on-demand Azure AI Translator function with a per-(card, lang) cache), or a native speaker flags quality problems.
+
+## ADR-041 — Cards carry `player_id`; the UI resolves player images
+- **Decision:** Cards include `player_id` and `team_id`, never an image URL. The UI renders the existing team-colored silhouette with the jersey number (ADR-035). If a generated avatar exists at `web/public/players/{player_id}.png`, served by the Static Web App CDN, it is shown instead, with a text alternative. No real photos, because players are fictional (ADR-006). Azure Blob Storage, Azure's equivalent of S3, is not used for now.
+- **Why:** It keeps event payloads small and stable, and the place images are stored can change without changing the card contract. Static images need no extra Azure resource, and the silhouette already works.
+- **How it could be wrong:** Generated avatars can look uncanny or inconsistent, and adding images later means a UI deploy.
+- **Revisit when:** Images become dynamic or user-uploaded (then use a Blob Storage container behind the CDN).
+
+## ADR-042 — Final-day order and cut line
+- **Decision:** The order on Oct 26–27 is: (1) facts-only, realistic simulator with unit checks; (2) facts tool + structured agent JSON + stricter schema; (3) Reviewer + Spanish, then a single full `azd deploy`; (4) UI shows player, team, minute, avatar and an EN/ES switch; (5) "Kick off a match" in Azure (C16); (6) README, video under 2 min, public repo, submit by Oct 27 noon PT. If time runs short, cut step 5 first: the demo match is started from a laptop for the video, and the README tells judges how to run the simulator themselves.
+- **Why:** About one working day remains. Steps 1–3 fix what judges will see in every card, and step 6 can't slip.
+- **How it could be wrong:** Without step 5, judges who don't run the simulator see an empty feed (Rule 4.8).
+- **Revisit when:** Steps 1–4 are done before Oct 27 morning PT; then do step 5.
+
+## ADR-043 — Reporter console on GitHub Pages: a receive-only demo with no sign-in
+- **Decision:** Host `web/` on **GitHub Pages** at `https://thiago-whatever.github.io/calacat-narrator/`, built and published by a GitHub Actions workflow. Vite `base` is `/calacat-narrator/`, `VITE_API_BASE_URL` points at the Function App's `/api` at build time, and the Function App allows that origin through CORS. The console is a **receive-only** frontend:
+  - **One shared feed.** Every open browser gets the same cards from the backend: the read endpoints `/cards` and `/negotiate`, then the Web PubSub push. There are no per-user sessions or isolation in the backend.
+  - **Nothing is sent back.** There are no edit, go-live or write endpoints. Selecting, editing, previewing and "going live" with a card (ADR-032, ADR-033) happen only in that browser's memory, aren't visible to anyone else, and reset on refresh.
+  - **The overlay is local too.** It's shown inside the console page (or another tab of the same browser). An external program such as OBS can't see a browser-local go-live.
+  - **No authentication or authorization**, and no `reporter` role; `staticwebapp.config.json` is dropped. Security headers are reduced to what a `<meta>` CSP can express.
+  - **Later (not in the MVP):** the only write the UI may gain is "start a simulation if none is running" (C16).
+  - The README and the submission's testing instructions say clearly that this is a demo build, not a production broadcast tool.
+
+  Supersedes ADR-036.
+- **Why:** Judges are anonymous: we can't invite them to a role or send them credentials, and Rule 4.8 asks for free, unrestricted access. With no write path, an open link can't change what anyone else sees, so sign-in isn't needed to keep the demo safe. GitHub Pages is free, needs no extra Azure resource, and the publish workflow is visible GitHub evidence.
+- **How it could be wrong:**
+  - The read API is public and callable cross-origin, so anyone can read the demo's fictional cards (acceptable for a demo).
+  - Without real response headers there's no `frame-ancestors` or similar protection.
+  - Because go-live is local, the overlay can't drive a separate broadcast tool, so "on air" in the demo is a simulation of the workflow.
+  - Free Pages requires the repo to be public.
+- **Revisit when:**
+  - The project is used beyond the hackathon or for real broadcast: then add a server-side go-live/overlay channel behind operator sign-in (Entra ID in the SPA, App Service authentication and a role check on every write endpoint).
+  - C16 adds "start a simulation": then that endpoint needs a running-match check and a rate limit, since it's the first anonymous write.

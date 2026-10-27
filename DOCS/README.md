@@ -2,7 +2,7 @@
 
 **Pitch:** Calacat Narrator turns a live stream of synthetic football events into explainable "did you know?" insight cards. A team of specialist AI agents produces candidate insights. An Editor agent ranks them by how much they matter *right now*. Broadcasters pick one to send to air, and fans get the same intelligence personalized by language, depth (casual ↔ analyst), favorite club or player, and accessibility needs.
 
-Built on Azure (Event Hubs, Functions, Service Bus, Cosmos DB, Container Apps, Web PubSub, Static Web Apps, AI Speech) with Microsoft Foundry + Microsoft Agent Framework and a custom MCP stats server.
+Built on Azure (Event Hubs, Functions, Service Bus, Cosmos DB, Container Apps, Web PubSub, AI Speech) with Microsoft Foundry + Microsoft Agent Framework and a custom MCP stats server. The web console is an open demo on GitHub Pages (ADR-043).
 
 ## Index
 | Doc | What's in it |
