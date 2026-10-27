@@ -18,7 +18,7 @@ import { onAirState, openOnAirChannel } from './data/onAirChannel'
 import { useDemoSource, type DemoRun } from './data/useDemoSource'
 import { useFeedDrag, useNow, usePrefs } from './hooks'
 import { minutes, STRINGS, topicLabel } from './i18n'
-import { clamp, COUNTDOWN_MS, initialState, reducer, SIZES } from './state'
+import { clamp, COUNTDOWN_MS, initialState, reducer, SIZES, type AirCard } from './state'
 import { AppThemeProvider } from './theme/AppThemeProvider'
 import type { ThemePrefs } from './theme/theme'
 import type { CardText, FeedCard, Lang, Source } from './types'
@@ -49,21 +49,20 @@ function viewHref(overlay: string | null): string {
   return query ? `?${query}` : window.location.pathname
 }
 
-function Overlay({ lang, setLang, prefs, setPrefs }: Omit<PrefsProps, 'starter'>) {
+/** The on-air output is what viewers get, so it is always in English, whatever the console's language. */
+function Overlay({ prefs, setPrefs }: Pick<PrefsProps, 'prefs' | 'setPrefs'>) {
   const [output, setOutput] = useState(() => overlayFromUrl() ?? 'o1')
   useEffect(() => {
-    document.documentElement.lang = lang
-    document.title = `Calacat Narrator · ${STRINGS[lang].overlay}`
-  }, [lang])
+    document.documentElement.lang = 'en'
+    document.title = `Calacat Narrator · ${STRINGS.en.overlay}`
+  }, [])
   const choose = (id: string) => {
     window.history.replaceState(null, '', viewHref(id))
     setOutput(id)
   }
   return (
     <OverlayView
-      t={STRINGS[lang]}
-      lang={lang}
-      onLang={setLang}
+      t={STRINGS.en}
       prefs={prefs}
       onPrefs={setPrefs}
       output={output}
@@ -159,9 +158,11 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
   const channel = useRef<ReturnType<typeof openOnAirChannel> | null>(null)
   const latestState = useRef(() => onAirState(outputs, s.onAir, teams))
   useEffect(() => {
-    latestState.current = () => onAirState(outputs, s.onAir, teams)
+    // The output is always in English: the reporter's English edit if there is one, else the English card.
+    const english = (air: AirCard): CardText => s.edits[`${air.id}:en`] ?? air.card.text.en
+    latestState.current = () => onAirState(outputs, s.onAir, teams, english)
     channel.current?.post(latestState.current())
-  }, [outputs, s.onAir, teams])
+  }, [outputs, s.onAir, teams, s.edits])
   useEffect(() => {
     const open = openOnAirChannel((message) => {
       if (message.type === 'hello') open.post(latestState.current())

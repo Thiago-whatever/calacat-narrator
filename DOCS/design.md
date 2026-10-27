@@ -128,9 +128,9 @@ A success toast ("Card is live on TV 1", with Pull) appears bottom-right over th
 ### On-air output
 
 - **Open on-air output** opens `?overlay=<output>` in a new tab: what viewers of that transmission get, never an editing surface. The console is titled **Control room** so the two are never confused.
-- Its header says **On-air output · TV 1** with a **What viewers see** tag, the transmission switcher, **Back to control room**, and the same language and Accessibility controls as the console.
+- Its title row says **On-air output · TV 1** with a **What viewers see** tag; the transmission switcher, **Back to control room** and the Accessibility menu sit on their own row below it, so a longer output name never moves them.
 - A tally strip above the stage reads **ON AIR · TV 1** in red with the headline, or **OFF AIR · TV 1** in grey; the stage gets a red frame while on air. A note below repeats that nothing here can be edited.
-- The card keeps the language it went live in, as viewers saw it; the language switch changes the page around it.
+- The output is always in English, whatever language the console uses: the page itself, and the card (the reporter's English edit if there is one, else the English text).
 
 ## Accessibility
 

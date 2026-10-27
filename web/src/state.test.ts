@@ -135,6 +135,12 @@ describe('overlay view (C14)', () => {
     expect(onAirState(outputs, pulled.onAir, { rio: team })).toMatchObject({ onAir: { o1: null, o2: null } })
   })
 
+  it('shows the text the console picks for viewers (English)', () => {
+    const english = { h: 'English headline', b: 'English body' }
+    const state = onAirState(outputs, onAir(initialState('o1')).onAir, { rio: team }, () => english)
+    expect(state.type === 'state' && state.onAir.o1?.text).toEqual(english)
+  })
+
   it('drops malformed cards and unknown messages', () => {
     expect(parseOnAirMessage({ type: 'state', outputs: [], onAir: { o1: { id: 'x' } } })).toEqual({ type: 'state', outputs: [], onAir: { o1: null } })
     expect(parseOnAirMessage({ type: 'go-live' })).toBeNull()

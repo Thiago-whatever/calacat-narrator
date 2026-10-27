@@ -1,5 +1,4 @@
 import { Box, Button, Typography } from '@mui/material'
-import type { ReactNode } from 'react'
 import type { Strings } from '../../i18n'
 import type { ThemePrefs } from '../../theme/theme'
 import type { Lang } from '../../types'
@@ -54,24 +53,6 @@ function Brand({ sub }: { sub: string }) {
   )
 }
 
-/** Language toggle and accessibility menu, shared by the console and the on-air output. */
-export function ViewPrefs({ t, lang, onLang, prefs, onPrefs, children }: Pick<Props, 't' | 'lang' | 'onLang' | 'prefs' | 'onPrefs'> & { children?: ReactNode }) {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', gridColumn: '1 / -1' }}>
-      {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
-      <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
-      <AccessibilityMenu
-        label={t.a11y}
-        options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
-        shortcuts={t.shortcuts}
-        prefs={prefs}
-        onChange={onPrefs}
-      />
-      {children}
-    </Box>
-  )
-}
-
 export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start, overlay, outputs, output, onOutput, period }: Props) {
   return (
     <Box
@@ -109,7 +90,16 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
           </Typography>
         )}
         <Button component="a" href={overlay.href} target="_blank" rel="noopener" sx={{ gridColumn: '1 / -1' }}>{overlay.label}</Button>
-        <ViewPrefs t={t} lang={lang} onLang={onLang} prefs={prefs} onPrefs={onPrefs}>
+        {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
+        <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
+        <Box sx={{ display: 'flex', gap: '10px', justifySelf: 'end' }}>
+          <AccessibilityMenu
+            label={t.a11y}
+            options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
+            shortcuts={t.shortcuts}
+            prefs={prefs}
+            onChange={onPrefs}
+          />
           <HelpDialog
             t={t}
             demo={run && t.start}
@@ -117,7 +107,7 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
             goLive={`${t.goLive} ${outputs.find((o) => o.id === output)?.name ?? ''}`.trim()}
             overlay={overlay.label}
           />
-        </ViewPrefs>
+        </Box>
       </Box>
     </Box>
   )

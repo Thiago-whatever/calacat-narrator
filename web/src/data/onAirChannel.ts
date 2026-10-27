@@ -25,13 +25,19 @@ export type OnAirMessage =
 
 const CHANNEL = 'calacat-on-air'
 
-export function onAirState(outputs: OverlayOutput[], onAir: Record<string, AirCard | null>, teams: Record<string, Team>): OnAirMessage {
+/** `textOf` picks the text viewers get; by default the text the card went live with. */
+export function onAirState(
+  outputs: OverlayOutput[],
+  onAir: Record<string, AirCard | null>,
+  teams: Record<string, Team>,
+  textOf: (air: AirCard) => CardText = (air) => ({ h: air.h, b: air.b }),
+): OnAirMessage {
   const cards: Record<string, OverlayCard | null> = {}
   for (const { id } of outputs) {
     const air = onAir[id]
     const team = air && teams[air.card.team]
     cards[id] = air && team
-      ? { id: air.id, card: air.card, team, geo: { x: air.x, y: air.y, width: air.width, height: air.height }, text: { h: air.h, b: air.b } }
+      ? { id: air.id, card: air.card, team, geo: { x: air.x, y: air.y, width: air.width, height: air.height }, text: textOf(air) }
       : null
   }
   return { type: 'state', outputs: outputs.map(({ id, name }) => ({ id, name })), onAir: cards }

@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { openOnAirChannel, type OverlayCard, type OverlayOutput } from '../../data/onAirChannel'
 import type { Strings } from '../../i18n'
 import type { ThemePrefs } from '../../theme/theme'
-import type { Lang } from '../../types'
-import { ViewPrefs } from '../header/Header'
+import { AccessibilityMenu } from '../header/AccessibilityMenu'
 import { StaticCard } from '../monitor/OnScreenCard'
 import { LiveRegion, Pill, StatusDot } from '../ui/primitives'
 import { SegmentedControl } from '../ui/SegmentedControl'
@@ -18,7 +17,7 @@ const DEFAULT_OUTPUTS: OverlayOutput[] = [
 ]
 
 // Room left for the header, tally strip and note, so the 16:9 stage fits the window's height.
-const STAGE_WIDTH = 'min(100%, calc((100dvh - 230px) * 16 / 9))'
+const STAGE_WIDTH = 'min(100%, calc((100dvh - 270px) * 16 / 9))'
 
 /** Program-sized key: only the on-air card is drawn on it, scaled like the console's monitor (cqw). Red-framed while on air. */
 const Stage = styled('div', { shouldForwardProp: (p) => p !== 'live' })<{ live: boolean }>(({ theme, live }) => ({
@@ -55,8 +54,6 @@ function TallyStrip({ live, label, detail }: { live: boolean; label: string; det
 
 interface Props {
   t: Strings
-  lang: Lang
-  onLang: (lang: Lang) => void
   prefs: ThemePrefs
   onPrefs: (prefs: ThemePrefs) => void
   output: string
@@ -69,7 +66,7 @@ interface Props {
  * this browser. Nothing goes over the network; it resets when the console reloads. It is the viewers'
  * side, so it says so: a "what viewers see" tag, a broadcast tally and no editing controls.
  */
-export function OverlayView({ t, lang, onLang, prefs, onPrefs, output, onOutput, consoleHref }: Props) {
+export function OverlayView({ t, prefs, onPrefs, output, onOutput, consoleHref }: Props) {
   const [outputs, setOutputs] = useState(DEFAULT_OUTPUTS)
   const [onAir, setOnAir] = useState<Record<string, OverlayCard | null>>({})
   const [announce, setAnnounce] = useState('')
@@ -105,17 +102,26 @@ export function OverlayView({ t, lang, onLang, prefs, onPrefs, output, onOutput,
       })}
     >
       <LiveRegion politeness="polite">{announce}</LiveRegion>
-      <Box component="header" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px 24px' }}>
-        <div>
+      {/* Title on its own row, so a longer output name never shifts the controls below it. */}
+      <Box component="header" sx={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px' }}>
           <Typography variant="display" component="h1" sx={{ fontSize: '1.4em', m: 0 }}>
             {t.overlay} · {name}
           </Typography>
-          <Pill tone="hot" label={t.overlayTag} sx={{ mt: '6px' }} />
-        </div>
-        <SegmentedControl label={t.output} compact segments={outputs.map((o) => ({ value: o.id, label: o.name }))} value={output} onChange={onOutput} />
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', ml: { sm: 'auto' } }}>
-          <Button component="a" href={consoleHref}>{t.backToConsole}</Button>
-          <ViewPrefs t={t} lang={lang} onLang={onLang} prefs={prefs} onPrefs={onPrefs} />
+          <Pill tone="hot" label={t.overlayTag} />
+        </Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 24px' }}>
+          <SegmentedControl label={t.output} compact segments={outputs.map((o) => ({ value: o.id, label: o.name }))} value={output} onChange={onOutput} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', ml: { sm: 'auto' } }}>
+            <Button component="a" href={consoleHref}>{t.backToConsole}</Button>
+            <AccessibilityMenu
+              label={t.a11y}
+              options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}
+              shortcuts={t.shortcuts}
+              prefs={prefs}
+              onChange={onPrefs}
+            />
+          </Box>
         </Box>
       </Box>
       <main>
