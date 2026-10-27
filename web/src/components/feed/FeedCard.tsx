@@ -75,11 +75,9 @@ export function FeedCard({ item, t, onPick, drag }: Props) {
         <Box sx={{ display: 'flex', gap: '12px', alignItems: 'flex-start', mt: '.6em' }}>
           <Silhouette team={team} player={card.player} t={t} size="46px" radius="10px" />
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            {card.player && (
-              <Typography component="span" sx={{ display: 'block', fontSize: '.78em', fontWeight: 700, letterSpacing: '.04em' }}>
-                #{card.player.num} {card.player.name}
-              </Typography>
-            )}
+            <Typography component="span" sx={{ display: 'block', fontSize: '.78em', fontWeight: 700, letterSpacing: '.04em' }}>
+              {card.player ? `#${card.player.num} ${card.player.name} · ${team.name}` : team.name}
+            </Typography>
             <Typography variant="display" sx={{ display: 'block', fontSize: '1.45em', m: '.15em 0 .35em' }}>{text.h}</Typography>
             <Typography component="span" sx={{ display: 'block', fontSize: '.9em', color: 'text.secondary' }}>{text.b}</Typography>
           </Box>

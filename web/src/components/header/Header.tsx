@@ -4,7 +4,7 @@ import type { ThemePrefs } from '../../theme/theme'
 import type { Lang } from '../../types'
 import { LogoIcon, PauseIcon, PlayIcon } from '../ui/icons'
 import { Pill } from '../ui/primitives'
-import { SelectField } from '../ui/SelectField'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { AccessibilityMenu } from './AccessibilityMenu'
 import { OutputSwitcher, type OutputOption } from './OutputSwitcher'
 
@@ -23,7 +23,10 @@ interface Props {
   period: string
 }
 
-const LANGUAGES = [{ options: [{ value: 'en', label: 'English' }, { value: 'es', label: 'Español' }] }]
+const LANGUAGES = [
+  { value: 'en' as const, label: 'EN', ariaLabel: 'English' },
+  { value: 'es' as const, label: 'ES', ariaLabel: 'Español' },
+]
 
 function Brand({ sub }: { sub: string }) {
   return (
@@ -70,7 +73,8 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, outpu
             {run.label}
           </Button>
         )}
-        <SelectField label={t.lang} hideLabel value={lang} onChange={(v) => onLang(v as Lang)} groups={LANGUAGES} sx={{ width: { xs: '100%', sm: 'auto' } }} />
+        {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
+        <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
         <AccessibilityMenu
           label={t.a11y}
           options={{ highContrast: t.hc, largeText: t.lg, reduceMotion: t.rm }}

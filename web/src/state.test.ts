@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mergeCards, parseLiveCard, toFeedCard } from './data/live'
+import { minutes } from './i18n'
 import { COUNTDOWN_MS, initialState, reducer, type Action, type ConsoleState } from './state'
 import type { FeedCard } from './types'
 
@@ -78,5 +79,41 @@ describe('live cards', () => {
     expect(parseLiveCard(null)).toBeNull()
     expect(parseLiveCard({ ...valid, salience: '1' })).toBeNull()
     expect(parseLiveCard({ ...valid, entity_ids: [1] })).toBeNull()
+  })
+})
+
+describe('bilingual live cards (ADR-040, ADR-041)', () => {
+  const base = {
+    card_id: 'card-2', match_id: 'm-0007', headline: 'Bram Elsen doubles the lead', body: "68' Bram Elsen scores. It's 2-0.",
+    entity_ids: ['t-home'], topic: 'goal', salience: 1, source: 'specialist', match_clock_s: 4020, expires_at: '2099-01-01T00:00:00Z',
+  }
+
+  it('uses team_id, player_id and the Spanish text when present', () => {
+    const card = toFeedCard(
+      parseLiveCard({ ...base, team_id: 't-home', player_id: 'p-nbr-09', i18n: { es: { headline: 'Bram Elsen amplía la ventaja', body: "68' Bram Elsen marca. Va 2-0." } } })!,
+      't-away',
+    )
+    expect(card.team).toBe('t-home')
+    expect(card.player?.name).toBe('Bram Elsen')
+    expect(card.text.es).toEqual({ h: 'Bram Elsen amplía la ventaja', b: "68' Bram Elsen marca. Va 2-0." })
+    expect(card.text.en.h).toBe('Bram Elsen doubles the lead')
+  })
+
+  it('falls back to English and ignores malformed translations', () => {
+    const card = toFeedCard(parseLiveCard({ ...base, i18n: { es: { headline: 42 } } })!, 't-home')
+    expect(card.text.es).toEqual(card.text.en)
+    expect(parseLiveCard({ ...base, team_id: 7 })).toBeNull()
+  })
+})
+
+describe('on-air minute', () => {
+  it.each([
+    [0, '1’'],
+    [59, '1’'],
+    [2699, '45’'],
+    [2700, '46’'],
+    [5400, '90’'],
+  ])('%i s is %s', (seconds, minute) => {
+    expect(minutes(seconds)).toBe(minute)
   })
 })
