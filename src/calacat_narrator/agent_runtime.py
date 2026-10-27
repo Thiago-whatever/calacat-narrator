@@ -298,6 +298,9 @@ class FoundryCandidateGenerator:
             options={
                 "response_format": CandidateDraft,
                 "reasoning": {"effort": "low"},
+                # Forced so the model can't caption from nothing (ADR-038). agent_framework
+                # resets a required tool_choice after the first round, so this can't loop.
+                "tool_choice": {"mode": "required", "required_function_name": "get_event_facts"},
             },
         )
         draft = response.value
