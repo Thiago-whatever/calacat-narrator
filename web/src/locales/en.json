@@ -83,6 +83,10 @@
   "shortcuts": "J / K move · Enter go live · Esc cancel or pull",
   "feedConnecting": "Connecting to the live feed…",
   "feedError": "Live feed unavailable. Retrying…",
+  "overlay": "Overlay",
+  "openOverlay": "Open overlay",
+  "overlayEmpty": "Nothing on air. Go live in the console to show a card here.",
+  "backToConsole": "Back to console",
   "topics": {
     "goal": "Goal",
     "passing": "Build-up",

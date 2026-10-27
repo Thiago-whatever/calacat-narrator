@@ -83,6 +83,10 @@
   "shortcuts": "J / K mover · Enter al aire · Esc cancelar o retirar",
   "feedConnecting": "Conectando con el feed en vivo…",
   "feedError": "Feed en vivo no disponible. Reintentando…",
+  "overlay": "Overlay",
+  "openOverlay": "Abrir overlay",
+  "overlayEmpty": "Nada al aire. Pon una tarjeta al aire en la consola para verla aquí.",
+  "backToConsole": "Volver a la consola",
   "topics": {
     "goal": "Gol",
     "passing": "Construcción",
