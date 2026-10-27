@@ -1,9 +1,12 @@
 """Deterministic card ranking, queueing, and dead-letter recovery contracts."""
 
+import asyncio
+import logging
+import re
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 from math import exp, log
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import NAMESPACE_URL, uuid5
 
 import yaml
@@ -14,12 +17,15 @@ from .agent_runtime import (
     HEADLINE_MAX,
     Candidate,
     Card,
-    event_facts,
-    signal_facts,
+    Lang,
+    ReviewDecision,
+    card_facts,
     signal_player_id,
     signal_team_id,
 )
 from .signals import ShotEventContext, Signal
+
+logger = logging.getLogger(__name__)
 
 
 class EditorConfig(BaseModel):
@@ -36,6 +42,7 @@ class EditorConfig(BaseModel):
     topic_rarity: dict[str, float]
     focus_match_relevance: float = Field(ge=0, le=1)
     focus_other_relevance: float = Field(ge=0, le=1)
+    review_timeout_s: float = Field(gt=0, le=30)
 
     @field_validator("topic_weights", "topic_rarity")
     @classmethod
@@ -261,30 +268,72 @@ def _fit(text: str, limit: int) -> str:
     return text[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
-def template_caption(kind: str, facts: dict[str, str]) -> tuple[str, str]:
-    """Broadcast-voice headline and body built only from facts (ADR-038)."""
-    team, minute, event = facts["team"], facts["minute"], facts["event"]
-    score = f" It's {facts['score']}." if "score" in facts else ""
-    if kind == "goal":
-        headline = f"{facts.get('player', team)} scores for {team}"
-        detail = f" with {facts['detail']}" if "detail" in facts else ""
-        body = f"{minute} {event}{detail}.{score}"
-    elif kind == "penalty":
-        headline = f"Penalty to {team}"
-        body = f"{minute} {event} against {facts['opponent']}.{score}"
-    elif kind == "red_card":
-        headline = f"Red card for {team}"
-        body = f"{minute} {event}. They play on a player down.{score}"
-    elif kind == "shot_volume":
-        headline = f"{team} keep shooting"
-        body = f"{minute} {event}, pushing {facts['opponent']} back.{score}"
-    elif kind == "pass_streak":
-        headline = f"{team} keep the ball"
-        body = f"{minute} {event}, keeping {facts['opponent']} chasing.{score}"
-    else:
-        headline = f"{team} in the {facts['half']}"
-        body = f"{minute} {event}.{score}"
-    return _fit(headline, HEADLINE_MAX), _fit(body, BODY_MAX)
+# Headline and body formats per language and topic; fields come from event_facts (ADR-040).
+_TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
+    "en": {
+        "goal": ("{who} scores for {team}", "{minute} {event}{detail}.{score}"),
+        "penalty": ("Penalty to {team}", "{minute} {event} against {opponent}.{score}"),
+        "red_card": (
+            "Red card for {team}",
+            "{minute} {event}. They play on a player down.{score}",
+        ),
+        "shot_volume": (
+            "{team} keep shooting",
+            "{minute} {event}, pushing {opponent} back.{score}",
+        ),
+        "pass_streak": (
+            "{team} keep the ball",
+            "{minute} {event}, keeping {opponent} chasing.{score}",
+        ),
+        "": ("{team} in the {half}", "{minute} {event}.{score}"),
+    },
+    "es": {
+        "goal": ("{who} marca para {team}", "{minute} {event}{detail}.{score}"),
+        "penalty": ("Penalti para {team}", "{minute} {event} ante {opponent}.{score}"),
+        "red_card": ("Roja para {team}", "{minute} {event}.{score}"),
+        "shot_volume": (
+            "{team} insiste",
+            "{minute} {event} y empuja a {opponent} hacia atrás.{score}",
+        ),
+        "pass_streak": (
+            "{team} tiene la pelota",
+            "{minute} {event} y hace correr a {opponent}.{score}",
+        ),
+        "": ("{team} en el {half}", "{minute} {event}.{score}"),
+    },
+}
+_SCORE_SENTENCE = {"en": " It's {score}.", "es": " Marcador: {score}."}
+_DETAIL_PREFIX = {"en": " with ", "es": " con "}
+
+
+def template_caption(kind: str, facts: dict[str, str], lang: Lang = "en") -> tuple[str, str]:
+    """Broadcast-voice headline and body built only from facts (ADR-038, ADR-040)."""
+    headline_format, body_format = _TEMPLATES[lang].get(kind, _TEMPLATES[lang][""])
+    fields = {
+        **facts,
+        "who": facts.get("player", facts["team"]),
+        "detail": _DETAIL_PREFIX[lang] + facts["detail"] if "detail" in facts else "",
+        "score": _SCORE_SENTENCE[lang].format(score=facts["score"]) if "score" in facts else "",
+    }
+    return (
+        _fit(headline_format.format(**fields), HEADLINE_MAX),
+        _fit(body_format.format(**fields), BODY_MAX),
+    )
+
+
+def localized_fallback_card(card: Card, body_part: str | None = None) -> Card:
+    """The templated card in English with its Spanish translation; never needs a model."""
+    headline, body = template_caption(card.topic, card_facts(card, "en", body_part), "en")
+    es_headline, es_body = template_caption(card.topic, card_facts(card, "es", body_part), "es")
+    return Card.model_validate(
+        {
+            **card.model_dump(),
+            "headline": headline,
+            "body": body,
+            "i18n": {"es": {"headline": es_headline, "body": es_body}},
+            "source": "fallback",
+        }
+    )
 
 
 def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None = None) -> Card:
@@ -293,25 +342,30 @@ def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None 
     metrics: dict[str, int | float] = {signal.kind: signal.value}
     if isinstance(signal.event_context, ShotEventContext):
         metrics["shot_speed_kmh"] = signal.event_context.speed_kmh
-    headline, body = template_caption(signal.kind, signal_facts(signal))
 
     candidate = Candidate(
         candidate_id=str(uuid5(NAMESPACE_URL, f"calacat:fallback:{signal.signal_id}")),
         signal_id=signal.signal_id,
         match_id=signal.match_id,
-        headline=headline,
-        why_it_matters=body,
+        # Placeholder text; localized_fallback_card writes the EN and ES captions below.
+        headline=signal.kind.replace("_", " "),
+        why_it_matters=signal.kind.replace("_", " "),
         metrics=metrics,
         evidence_event_ids=signal.evidence_event_ids,
         entity_ids=list(signal.entity.values()),
         team_id=signal_team_id(signal),
         player_id=signal_player_id(signal),
+        score=signal.score,
         topic=signal.kind,
         self_salience=1.0,
         ttl_s=min(config.default_ttl_s, config.max_ttl_s),
         match_clock_s=signal.match_clock_s,
     )
-    return Card.from_candidate(candidate, created_at=created_at, source="fallback")
+    shot = signal.event_context if isinstance(signal.event_context, ShotEventContext) else None
+    return localized_fallback_card(
+        Card.from_candidate(candidate, created_at=created_at, source="fallback"),
+        body_part=shot.body_part if shot else None,
+    )
 
 
 def fallback_candidate_card(
@@ -322,34 +376,68 @@ def fallback_candidate_card(
 ) -> Card:
     """Replace a dead-lettered narrative with a template over verified candidate fields."""
     created_at = _aware_now(now)
-    facts = event_facts(
-        kind=candidate.topic,
-        value=int(candidate.metrics.get(candidate.topic, 0)),
-        clock_s=candidate.match_clock_s,
-        team_id=candidate.team_id,
-        player_id=candidate.player_id,
-        speed_kmh=candidate.metrics.get("shot_speed_kmh"),
+    fallback = candidate.model_copy(
+        update={
+            "candidate_id": str(
+                uuid5(NAMESPACE_URL, f"calacat:fallback-candidate:{candidate.candidate_id}")
+            ),
+            "self_salience": 1.0,
+            "ttl_s": min(config.default_ttl_s, config.max_ttl_s, candidate.ttl_s),
+        }
     )
-    headline, body = template_caption(candidate.topic, facts)
-    fallback = Candidate(
-        candidate_id=str(
-            uuid5(NAMESPACE_URL, f"calacat:fallback-candidate:{candidate.candidate_id}")
-        ),
-        signal_id=candidate.signal_id,
-        match_id=candidate.match_id,
-        headline=headline,
-        why_it_matters=body,
-        metrics=candidate.metrics,
-        evidence_event_ids=candidate.evidence_event_ids,
-        entity_ids=candidate.entity_ids,
-        team_id=candidate.team_id,
-        player_id=candidate.player_id,
-        topic=candidate.topic,
-        self_salience=1.0,
-        ttl_s=min(config.default_ttl_s, config.max_ttl_s, candidate.ttl_s),
-        match_clock_s=candidate.match_clock_s,
+    return localized_fallback_card(
+        Card.from_candidate(fallback, created_at=created_at, source="fallback")
     )
-    return Card.from_candidate(fallback, created_at=created_at, source="fallback")
+
+
+# ---- Review (ADR-039): after the budget picks a card, before it is stored and pushed.
+
+
+class Reviewer(Protocol):
+    async def review(self, card: Card, facts: dict[str, str]) -> ReviewDecision: ...
+
+
+_NUMBER = re.compile(r"\d+")
+
+
+def check_against_facts(card: Card, facts: dict[str, str]) -> None:
+    """Every number must come from the facts, and each body must give the minute."""
+    if card.i18n is None:
+        raise ValueError("reviewed card has no Spanish text")
+    allowed = set(_NUMBER.findall(" ".join(facts.values())))
+    texts = (card.headline, card.body, card.i18n.es.headline, card.i18n.es.body)
+    if unknown := set(_NUMBER.findall(" ".join(texts))) - allowed:
+        raise ValueError(f"reviewed text has numbers not in the facts: {sorted(unknown)}")
+    if facts["minute"] not in card.body or facts["minute"] not in card.i18n.es.body:
+        raise ValueError("reviewed text must give the minute in both languages")
+
+
+async def review_card(card: Card, reviewer: Reviewer | None, *, timeout_s: float) -> Card | None:
+    """Approve or revise to a reviewed bilingual card, reject to None, or fall back on failure."""
+    if card.source == "fallback" and card.i18n is not None:
+        return card
+    if card.source == "fallback" or reviewer is None:
+        return localized_fallback_card(card)
+    facts = card_facts(card)
+    try:
+        decision = await asyncio.wait_for(reviewer.review(card, facts), timeout_s)
+        if decision.decision == "reject":
+            logger.info("Reviewer rejected card %s", card.card_id)
+            return None
+        reviewed = Card.model_validate(
+            {
+                **card.model_dump(),
+                "headline": decision.headline,
+                "body": decision.body,
+                "i18n": {"es": decision.es.model_dump()},
+            }
+        )
+        check_against_facts(reviewed, facts)
+        return reviewed
+    except Exception:
+        # Timeout, model or network error, or invalid output: publish the template instead.
+        logger.warning("Review failed for card %s; using the fallback", card.card_id, exc_info=True)
+        return localized_fallback_card(card)
 
 
 def _aware_now(now: datetime | None) -> datetime:

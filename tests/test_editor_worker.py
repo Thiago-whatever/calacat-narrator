@@ -5,7 +5,7 @@ import pytest
 from azure.cosmos.exceptions import CosmosResourceExistsError
 
 from calacat_narrator import editor_worker
-from calacat_narrator.agent_runtime import Candidate
+from calacat_narrator.agent_runtime import Candidate, LocalizedCaption, ReviewDecision
 from calacat_narrator.cosmos import persist_card
 from calacat_narrator.editor import Editor, EditorConfig, fallback_card
 from calacat_narrator.signals import Signal
@@ -252,10 +252,13 @@ def test_editor_worker_settings_require_candidate_and_dlq_routes() -> None:
             "SERVICEBUS_EDITOR_SUBSCRIPTION_NAME": "editor",
             "SERVICEBUS_TOPIC_NAME": "signals",
             "EDITOR_DEADLETTER_SUBSCRIPTIONS": "goal-shot, buildup-passing",
+            "FOUNDRY_PROJECT_ENDPOINT": "https://example.services.ai.azure.com/api/projects/p",
+            "FOUNDRY_MODEL": "narrator-chat",
         }
     )
 
     assert settings.deadletter_subscriptions == ("goal-shot", "buildup-passing")
+    assert settings.foundry_model == "narrator-chat"
     with pytest.raises(RuntimeError, match="EDITOR_DEADLETTER_SUBSCRIPTIONS"):
         editor_worker.EditorWorkerSettings.from_environment(
             {
@@ -297,3 +300,57 @@ def test_stored_card_is_pushed_and_a_failed_push_still_completes(
     assert len(container.documents) == 1
     assert pushed == [container.documents[0]["id"]]
     assert receiver.completed == [message]
+
+
+class RejectingReviewer:
+    async def review(self, card, facts):
+        return ReviewDecision(
+            decision="reject",
+            headline=card.headline,
+            body=card.body,
+            es=LocalizedCaption(headline="Sin novedad", body="Nada que contar."),
+        )
+
+
+def goal_candidate_message() -> FakeMessage:
+    return FakeMessage(
+        candidate_json().replace(b"shot_volume", b"goal").replace(b"candidate-1", b"candidate-goal")
+    )
+
+
+def test_rejected_card_is_dropped_and_frees_the_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    receiver, message, container = FakeReceiver(), goal_candidate_message(), FakeContainer()
+    monkeypatch.setattr(editor_worker, "get_cards_container", lambda: container)
+    editor = Editor(EditorConfig.load())
+    now = datetime(2026, 10, 25, tzinfo=UTC)
+
+    asyncio.run(
+        editor_worker.process_candidate_message(
+            receiver, message, editor, {}, now=now, reviewer=RejectingReviewer()
+        )
+    )
+
+    assert container.documents == []
+    assert receiver.completed == [message]
+    # Nothing was published, so the next card is not held back by the rate limit.
+    editor.submit(Candidate.model_validate_json(candidate_json()), now=now + timedelta(seconds=1))
+    assert editor.peek_due(now=now + timedelta(seconds=1)) is not None
+
+
+def test_every_stored_card_carries_spanish(monkeypatch: pytest.MonkeyPatch) -> None:
+    container = FakeContainer()
+    monkeypatch.setattr(editor_worker, "get_cards_container", lambda: container)
+    monkeypatch.setattr(editor_worker, "publish_cards", lambda cards: None)
+
+    asyncio.run(
+        editor_worker.process_candidate_message(
+            FakeReceiver(),
+            goal_candidate_message(),
+            Editor(EditorConfig.load()),
+            {},
+            now=datetime(2026, 10, 25, tzinfo=UTC),
+        )
+    )
+
+    assert container.documents
+    assert all(document["i18n"]["es"]["body"] for document in container.documents)

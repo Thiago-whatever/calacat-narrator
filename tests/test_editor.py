@@ -1,10 +1,18 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 
-from calacat_narrator.agent_runtime import BODY_MAX, HEADLINE_MAX, Candidate
-from calacat_narrator.editor import Editor, EditorConfig, fallback_card
+from calacat_narrator.agent_runtime import (
+    BODY_MAX,
+    HEADLINE_MAX,
+    Candidate,
+    Card,
+    LocalizedCaption,
+    ReviewDecision,
+)
+from calacat_narrator.editor import Editor, EditorConfig, fallback_card, review_card
 from calacat_narrator.signals import ShotEventContext, Signal
 
 
@@ -198,3 +206,126 @@ def test_goal_fallback_names_the_scorer_and_the_new_score() -> None:
         "It's Northbridge Comets 2, Southmere Foxes 0."
     )
     assert card.player_id == "p-nbr-09"
+
+
+# ---- Reviewer (ADR-039, ADR-040)
+
+
+class FakeReviewer:
+    def __init__(self, result=None, *, delay: float = 0, error: Exception | None = None) -> None:
+        self.result, self.delay, self.error = result, delay, error
+        self.facts: dict[str, str] = {}
+
+    async def review(self, card, facts):
+        self.facts = facts
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.error:
+            raise self.error
+        return self.result
+
+
+def specialist_goal_card() -> Card:
+    candidate = Candidate(
+        candidate_id="cand-goal",
+        signal_id="signal-goal-1",
+        match_id="m-0007",
+        headline="Elsen doubles the lead",
+        why_it_matters="68' Bram Elsen scores again for Northbridge Comets.",
+        metrics={"goal": 2, "shot_speed_kmh": 104},
+        evidence_event_ids=["evt-goal-1"],
+        entity_ids=["t-home"],
+        team_id="t-home",
+        player_id="p-nbr-09",
+        score={"t-home": 2},
+        topic="goal",
+        self_salience=0.9,
+        match_clock_s=4020,
+    )
+    return Card.from_candidate(candidate, created_at=datetime(2026, 10, 25, tzinfo=UTC))
+
+
+def decision(
+    kind: str, *, body: str = "68' Bram Elsen scores with a 104 km/h strike. It's 2-0."
+) -> ReviewDecision:
+    return ReviewDecision(
+        decision=kind,
+        headline="Bram Elsen doubles the lead",
+        body=body,
+        es=LocalizedCaption(
+            headline="Bram Elsen amplía la ventaja",
+            body="68' Bram Elsen marca con un remate a 104 km/h. Va 2-0.",
+        ),
+    )
+
+
+def review(reviewer, card: Card | None = None, timeout_s: float = 1) -> Card | None:
+    return asyncio.run(review_card(card or specialist_goal_card(), reviewer, timeout_s=timeout_s))
+
+
+def test_reviewer_approve_publishes_reviewed_bilingual_card() -> None:
+    reviewer = FakeReviewer(decision("approve"))
+
+    card = review(reviewer)
+
+    assert card is not None and card.source == "specialist"
+    assert card.headline == "Bram Elsen doubles the lead"
+    assert card.i18n is not None and card.i18n.es.headline == "Bram Elsen amplía la ventaja"
+    assert reviewer.facts["minute"] == "68'"
+    assert card.evidence_event_ids == ["evt-goal-1"] and card.player_id == "p-nbr-09"
+
+
+def test_reviewer_revise_replaces_the_draft_text() -> None:
+    revised = decision("revise", body="68' Bram Elsen makes it 2-0 for Northbridge Comets.")
+
+    card = review(FakeReviewer(revised))
+
+    assert card is not None
+    assert card.body == "68' Bram Elsen makes it 2-0 for Northbridge Comets."
+    assert card.body != specialist_goal_card().body
+
+
+def test_reviewer_reject_drops_the_card() -> None:
+    assert review(FakeReviewer(decision("reject"))) is None
+
+
+@pytest.mark.parametrize(
+    "reviewer",
+    [
+        FakeReviewer(decision("approve"), delay=0.5),
+        FakeReviewer(error=RuntimeError("model unavailable")),
+        FakeReviewer(error=ValueError("response did not match the schema")),
+        FakeReviewer(decision("approve", body="68' Bram Elsen scores. It's 3-0.")),
+        FakeReviewer("not a decision"),
+    ],
+    ids=["timeout", "error", "invalid-output", "wrong-number", "wrong-type"],
+)
+def test_reviewer_failures_publish_the_bilingual_fallback(reviewer: FakeReviewer) -> None:
+    card = review(reviewer, timeout_s=0.05)
+
+    assert card is not None and card.source == "fallback"
+    assert card.headline == "Bram Elsen scores for Northbridge Comets"
+    assert card.i18n is not None
+    assert card.i18n.es.headline == "Bram Elsen marca para Northbridge Comets"
+    assert card.i18n.es.body.startswith("68' Bram Elsen marcó para Northbridge Comets")
+
+
+def test_fallback_cards_carry_spanish_without_a_reviewer() -> None:
+    card = fallback_card(
+        make_goal_signal(), EditorConfig.load(), now=datetime(2026, 10, 25, tzinfo=UTC)
+    )
+
+    assert card.i18n is not None
+    assert card.i18n.es.body == (
+        "68' Bram Elsen marcó para Northbridge Comets con un remate a 104 km/h. "
+        "Marcador: Northbridge Comets 2, Southmere Foxes 0."
+    )
+    assert review(None, card) == card
+
+
+@pytest.mark.parametrize(
+    "leak", ["Según los datos, gol", "La señal confirma el gol", "Gol a los 3401 segundos"]
+)
+def test_spanish_text_is_validated_too(leak: str) -> None:
+    with pytest.raises(ValueError):
+        LocalizedCaption(headline="Gol", body=leak)
