@@ -43,7 +43,6 @@ def make_goal_signal() -> Signal:
             period=2,
             outcome="goal",
             speed_kmh=104,
-            xg=0.72,
             body_part="foot",
         ),
         tier=1,
@@ -150,6 +149,6 @@ def test_deadletter_fallback_is_deterministic_and_preserves_verified_evidence() 
     assert card.card_id == str(uuid5(NAMESPACE_URL, f"calacat:card:{card.candidate_id}"))
     assert card.signal_id == signal.signal_id
     assert card.evidence_event_ids == signal.evidence_event_ids
-    assert card.metrics == {"goal": 2, "shot_speed_kmh": 104, "xg": 0.72}
+    assert card.metrics == {"goal": 2, "shot_speed_kmh": 104}
     assert card.match_clock_s == signal.match_clock_s
     assert card.expires_at == now + timedelta(seconds=card.ttl_s)

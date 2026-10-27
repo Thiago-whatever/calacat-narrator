@@ -3,7 +3,9 @@ import json
 import pytest
 
 from calacat_narrator.catalog import load_catalog
+from calacat_narrator.interpreter import apply_event
 from calacat_narrator.schemas import MatchEvent, PositionSnapshot
+from calacat_narrator.signals import evaluate_signals, load_signal_rules
 from calacat_narrator.simulator import SeededMatch, main, serialize_record, simulate_match
 
 
@@ -66,3 +68,145 @@ def test_cli_writes_complete_offline_jsonl(tmp_path) -> None:
 def test_cli_rejects_zero_speed() -> None:
     with pytest.raises(SystemExit):
         main(["--speed", "0", "--duration-s", "4"])
+
+
+# ---- Realism and facts-only checks over 20 full matches (ADR-037)
+
+CALIBRATION_SEEDS = range(20)
+ON_BALL_EVENTS = {"pass", "duel", "possession_change", "shot"}
+
+
+@pytest.fixture(scope="module")
+def full_matches() -> dict[int, list[MatchEvent]]:
+    catalog = load_catalog()
+    return {
+        seed: [
+            record
+            for record in simulate_match(seed, catalog=catalog)
+            if isinstance(record, MatchEvent)
+        ]
+        for seed in CALIBRATION_SEEDS
+    }
+
+
+def _count(events: list[MatchEvent], event_type: str, **payload: object) -> int:
+    return sum(
+        1
+        for event in events
+        if event.type == event_type
+        and all(getattr(event.payload, key) == value for key, value in payload.items())
+    )
+
+
+def test_full_matches_have_realistic_goals_and_shots(full_matches) -> None:
+    goals = [_count(events, "shot", outcome="goal") for events in full_matches.values()]
+    shots = [_count(events, "shot") for events in full_matches.values()]
+
+    assert 2.2 <= sum(goals) / len(goals) <= 3.4
+    assert max(goals) <= 8
+    assert 18 <= sum(shots) / len(shots) <= 32
+
+
+def test_full_matches_turn_the_ball_over_and_award_penalties(full_matches) -> None:
+    assert all(_count(events, "possession_change") >= 150 for events in full_matches.values())
+    assert sum(_count(events, "set_piece", kind="penalty") for events in full_matches.values()) >= 1
+
+
+def test_goalkeeper_saves_follow_only_saved_shots(full_matches) -> None:
+    for events in full_matches.values():
+        shots = {event.event_id: event for event in events if event.type == "shot"}
+        for event in events:
+            if event.type == "gk_action":
+                assert shots[event.payload.shot_event_id].payload.outcome == "saved"
+
+
+def test_conceding_team_kicks_off_after_a_goal(full_matches) -> None:
+    for events in full_matches.values():
+        for index, event in enumerate(events):
+            if event.type == "shot" and event.payload.outcome == "goal":
+                # Pressure and fouls carry the defending team's ID, so look at on-ball actions.
+                restart = next((e for e in events[index + 1 :] if e.type in ON_BALL_EVENTS), None)
+                if restart is not None and restart.period == event.period:
+                    assert restart.team_id != event.team_id
+
+
+def test_ball_can_move_backwards(full_matches) -> None:
+    events = full_matches[0]
+    backward = [
+        event
+        for event in events
+        if event.type == "pass"
+        and (event.payload.end_x - event.x) * (1 if event.team_id == "t-home" else -1) < 0
+    ]
+    assert backward
+
+
+def test_events_are_facts_only_and_validate(full_matches) -> None:
+    for events in full_matches.values():
+        for event in events:
+            dumped = event.model_dump(mode="json")
+            assert MatchEvent.model_validate(dumped) == event
+            assert {"xg", "difficulty", "inside_opp_shape"}.isdisjoint(dumped["payload"])
+
+
+def test_full_match_is_byte_identical_for_a_seed() -> None:
+    first = "\n".join(serialize_record(record) for record in simulate_match(seed=11))
+    second = "\n".join(serialize_record(record) for record in simulate_match(seed=11))
+    assert first == second
+
+
+def test_threshold_signals_fire_beyond_goals() -> None:
+    kinds: set[str] = set()
+    rules = load_signal_rules()
+    for seed in (101, 202, 303):
+        state = None
+        for record in simulate_match(seed):
+            if isinstance(record, MatchEvent):
+                state, _ = apply_event(state, record)
+                kinds.update(signal.kind for signal in evaluate_signals(state, record, rules))
+    assert {"goal", "shot_volume", "pass_streak"} <= kinds
+
+
+def _red_cards(events: list[MatchEvent]) -> list[MatchEvent]:
+    return [event for event in events if event.type == "card" and event.payload.card == "red"]
+
+
+def test_sent_off_players_take_no_further_part(full_matches) -> None:
+    for events in full_matches.values():
+        sent_off: set[str] = set()
+        yellows: dict[str, int] = {}
+        for event in events:
+            involved = {event.player_id}
+            if event.type == "pass":
+                involved.add(event.payload.receiver_id)
+            assert sent_off.isdisjoint(involved), f"sent-off player acted: {event.event_id}"
+            if event.type == "card" and event.payload.card == "yellow":
+                yellows[event.player_id] = yellows.get(event.player_id, 0) + 1
+                # A second booking is emitted as a red, never as a second yellow.
+                assert yellows[event.player_id] == 1, event.event_id
+            elif event.type == "card":
+                sent_off.add(event.player_id)
+
+
+def test_second_yellows_become_reds_and_cards_stay_realistic(full_matches) -> None:
+    reds = [card for events in full_matches.values() for card in _red_cards(events)]
+    yellows = sum(_count(events, "card", card="yellow") for events in full_matches.values())
+
+    assert any(card.payload.reason.startswith("second yellow") for card in reds)
+    assert 2 <= yellows / len(full_matches) <= 5
+    assert len(reds) / len(full_matches) <= 0.5
+
+
+def test_sent_off_player_leaves_the_position_stream(full_matches) -> None:
+    seed, red = next(
+        (seed, _red_cards(events)[0]) for seed, events in full_matches.items() if _red_cards(events)
+    )
+    snapshots = [
+        record
+        for record in simulate_match(seed)
+        if isinstance(record, PositionSnapshot) and record.match_clock_s > red.match_clock_s
+    ]
+
+    assert snapshots
+    assert all(red.player_id not in {p.id for p in snapshot.players} for snapshot in snapshots)
+    assert all(len(snapshot.players) == 21 for snapshot in snapshots[:5])

@@ -55,7 +55,6 @@ def test_critical_goal_bypasses_clock_and_sample_gates() -> None:
             "outcome": "goal",
             "goal_y": 3.66,
             "goal_z": 1.2,
-            "xg": 0.4,
             "body_part": "foot",
         },
         clock_s=30,
@@ -71,7 +70,6 @@ def test_critical_goal_bypasses_clock_and_sample_gates() -> None:
     assert signal.event_context.event_type == "shot"
     assert signal.event_context.event_id == event.event_id
     assert signal.event_context.speed_kmh == 90
-    assert signal.event_context.xg == 0.4
     assert signal.event_context.period == 1
     repeated_state, _ = apply_event(None, event)
     repeated = evaluate_signals(repeated_state, event, load_signal_rules())[0]
@@ -127,8 +125,6 @@ def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:
             "speed_kmh": 63,
             "outcome": "complete",
             "height": "ground",
-            "difficulty": 0.4,
-            "inside_opp_shape": True,
         },
     )
 
@@ -141,8 +137,7 @@ def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:
     assert first[0].event_context is not None
     assert first[0].event_context.event_type == "pass"
     assert first[0].event_context.event_id == event.event_id
-    assert first[0].event_context.difficulty == 0.4
-    assert first[0].event_context.inside_opp_shape is True
+    assert first[0].event_context.outcome == "complete"
     assert repeated == []
 
     stats.current_pass_streak = 6
@@ -157,8 +152,6 @@ def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:
             "speed_kmh": 63,
             "outcome": "complete",
             "height": "ground",
-            "difficulty": 0.4,
-            "inside_opp_shape": True,
         },
         clock_s=800,
     )
@@ -177,8 +170,6 @@ def test_pass_streak_uses_sample_gate_hysteresis_and_cooldown() -> None:
             "speed_kmh": 63,
             "outcome": "complete",
             "height": "ground",
-            "difficulty": 0.4,
-            "inside_opp_shape": True,
         },
         clock_s=1200,
     )
@@ -197,7 +188,6 @@ def test_interpreter_publishes_critical_signal_before_persist(monkeypatch) -> No
             "outcome": "goal",
             "goal_y": 3.66,
             "goal_z": 1.2,
-            "xg": 0.4,
             "body_part": "foot",
         },
     )
@@ -230,7 +220,6 @@ def test_service_bus_messages_use_signal_ids_for_duplicate_detection(monkeypatch
             "outcome": "goal",
             "goal_y": 3.66,
             "goal_z": 1.2,
-            "xg": 0.4,
             "body_part": "foot",
         },
     )

@@ -79,7 +79,6 @@ class ShotEventContext(BaseModel):
     period: Literal[1, 2]
     outcome: Literal["goal", "saved", "off", "blocked"]
     speed_kmh: float = Field(ge=0, le=250)
-    xg: float = Field(ge=0, le=1)
     body_part: Literal["foot", "head", "other"]
 
 
@@ -100,8 +99,6 @@ class PassEventContext(BaseModel):
     event_id: str = Field(min_length=1, max_length=64)
     period: Literal[1, 2]
     outcome: Literal["complete", "incomplete", "out"]
-    difficulty: float = Field(ge=0, le=1)
-    inside_opp_shape: bool
 
 
 SignalEventContext = Annotated[
@@ -291,7 +288,6 @@ def _create_signal(
             period=event.period,
             outcome=event.payload.outcome,
             speed_kmh=event.payload.speed_kmh,
-            xg=event.payload.xg,
             body_part=event.payload.body_part,
         )
     elif rule.kind in {"pass_streak", "pass_milestone", "progression"} and isinstance(
@@ -301,8 +297,6 @@ def _create_signal(
             event_id=event.event_id,
             period=event.period,
             outcome=event.payload.outcome,
-            difficulty=event.payload.difficulty,
-            inside_opp_shape=event.payload.inside_opp_shape,
         )
     elif rule.kind == "penalty" and isinstance(event.payload, SetPiecePayload):
         event_context = PenaltyEventContext(

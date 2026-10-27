@@ -26,8 +26,6 @@ def make_event(**overrides: object) -> dict[str, object]:
             "speed_kmh": 63.0,
             "outcome": "complete",
             "height": "ground",
-            "difficulty": 0.4,
-            "inside_opp_shape": True,
         },
     }
     event.update(overrides)
