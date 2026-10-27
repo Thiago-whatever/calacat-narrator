@@ -285,6 +285,7 @@ def test_reviewer_approve_publishes_reviewed_bilingual_card() -> None:
     assert card.i18n is not None and card.i18n.es.headline == "Bram Elsen amplía la ventaja"
     assert reviewer.facts["minute"] == "68'"
     assert card.evidence_event_ids == ["evt-goal-1"] and card.player_id == "p-nbr-09"
+    assert card.review == "approved"
 
 
 def test_reviewer_revise_replaces_the_draft_text() -> None:
@@ -295,6 +296,7 @@ def test_reviewer_revise_replaces_the_draft_text() -> None:
     assert card is not None
     assert card.body == "68' Bram Elsen makes it 2-0 for Northbridge Comets."
     assert card.body != specialist_goal_card().body
+    assert card.review == "revised"
 
 
 def test_reviewer_reject_drops_a_non_critical_card() -> None:
@@ -348,7 +350,7 @@ def test_reviewer_sees_the_body_part_stored_on_the_card() -> None:
 def test_reviewer_failures_publish_the_bilingual_fallback(reviewer: FakeReviewer) -> None:
     card = review(reviewer, timeout_s=0.05)
 
-    assert card is not None and card.source == "fallback"
+    assert card is not None and card.source == "fallback" and card.review is None
     assert card.headline == "Bram Elsen scores for Northbridge Comets"
     assert card.i18n is not None
     assert card.i18n.es.headline == "Bram Elsen marca para Northbridge Comets"

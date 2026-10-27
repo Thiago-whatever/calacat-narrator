@@ -336,6 +336,7 @@ def localized_fallback_card(card: Card) -> Card:
             "body": body,
             "i18n": {"es": {"headline": es_headline, "body": es_body}},
             "source": "fallback",
+            "review": None,
         }
     )
 
@@ -449,6 +450,7 @@ async def review_card(
                 "headline": decision.headline,
                 "body": decision.body,
                 "i18n": {"es": decision.es.model_dump()},
+                "review": "approved" if decision.decision == "approve" else "revised",
             }
         )
         check_against_facts(reviewed, facts)

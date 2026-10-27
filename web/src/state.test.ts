@@ -77,6 +77,16 @@ describe('live cards', () => {
     expect(mergeCards(prev, [feedCard('new', 3000), feedCard('new', 3000)], 500).map((c) => c.id)).toEqual(['live', 'old', 'demo', 'new'])
   })
 
+  it('carries the agent trail: specialist, Reviewer verdict, or fallback', () => {
+    const reviewed = toFeedCard(parseLiveCard({ ...valid, agent: 'goal-shot', review: 'revised' })!, 't-home')
+    expect(reviewed).toMatchObject({ specialist: { en: 'Goal & Shot', es: 'Gol y remate' }, review: 'revised' })
+    const fallback = toFeedCard(parseLiveCard({ ...valid, source: 'fallback', agent: 'buildup-passing', review: null })!, 't-home')
+    expect(fallback).toMatchObject({ specialist: { en: 'Build-up & Passing' }, review: 'fallback' })
+    const unknown = toFeedCard(parseLiveCard({ ...valid, agent: 'tactical', review: 'maybe' })!, 't-home')
+    expect(unknown).toMatchObject({ specialist: { en: 'Tactical' }, review: undefined })
+    expect(toFeedCard(parseLiveCard(valid)!, 't-home').specialist).toBeUndefined()
+  })
+
   it('rejects malformed payloads', () => {
     expect(parseLiveCard(null)).toBeNull()
     expect(parseLiveCard({ ...valid, salience: '1' })).toBeNull()

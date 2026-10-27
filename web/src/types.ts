@@ -30,6 +30,8 @@ export interface Output {
   match: string
 }
 
+export type Review = 'approved' | 'revised' | 'fallback'
+
 export interface CardText {
   h: string
   b: string
@@ -45,7 +47,9 @@ export interface FeedCard {
   topic: string
   critical: boolean
   salience: number
+  /** Agent trail: the specialist that wrote it, then the Reviewer's verdict or the Editor's fallback template. */
   specialist?: Record<Lang, string>
+  review?: Review
   text: Record<Lang, CardText>
   /** Epoch ms after which the insight is stale and must not go to air. Demo cards never expire. */
   expiresAt?: number

@@ -4,12 +4,15 @@ import { minutes, topicLabel, type Strings } from '../../i18n'
 import { pop } from '../../theme/motion'
 import type { CardText, FeedCard as FeedCardData, Team } from '../../types'
 import { Silhouette } from '../Silhouette'
+import { CheckIcon } from '../ui/icons'
 import { Pill, SalienceMeter } from '../ui/primitives'
 
 export interface FeedItem {
   card: FeedCardData
   team: Team
   text: CardText
+  /** The specialist that wrote it, in the interface language. */
+  agent?: string
   meta: string
   isNew: boolean
   liveOn: string[]
@@ -33,9 +36,28 @@ interface Props {
   drag: CardDragHandlers
 }
 
+/** Which agents handled the card: specialist → Reviewer verdict, or the Editor's fallback template. */
+function AgentTrail({ agent, review, t }: { agent?: string; review?: FeedCardData['review']; t: Strings }) {
+  if (!agent && !review) return null
+  const verdict = review === 'approved' ? t.reviewed : review === 'revised' ? t.revised : review === 'fallback' ? t.fallback : null
+  return (
+    <Box component="span" role="group" aria-label={t.trail} sx={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '1.1em' }}>
+      {agent && <Pill size="small" label={agent} />}
+      {agent && verdict && <Box component="span" aria-hidden>→</Box>}
+      {verdict && (
+        <Pill
+          size="small"
+          tone={review === 'fallback' ? 'soft' : 'new'}
+          label={review === 'fallback' ? verdict : <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckIcon aria-hidden sx={{ width: 12, height: 12, fontSize: 12 }} />{verdict}</Box>}
+        />
+      )}
+    </Box>
+  )
+}
+
 /** One insight: click to preview it on the monitor, or drag it onto a spot. */
 export function FeedCard({ item, t, onPick, drag }: Props) {
-  const { card, team, text, meta, isNew, liveOn, selected, locked, lifted } = item
+  const { card, team, text, agent, meta, isNew, liveOn, selected, locked, lifted } = item
   return (
     <Card
       component="li"
@@ -83,7 +105,8 @@ export function FeedCard({ item, t, onPick, drag }: Props) {
           </Box>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: { xs: 'wrap', sm: 'nowrap' }, mt: '.8em', fontSize: '.75em', color: 'text.secondary' }}>
-          <Box component="span" sx={{ flex: { xs: '1 1 100%', sm: 'none' } }}>{meta}</Box>
+          <AgentTrail agent={agent} review={card.review} t={t} />
+          {meta && <Box component="span" sx={{ flex: { xs: '1 1 100%', sm: 'none' } }}>{meta}</Box>}
           <SalienceMeter value={card.salience} label={t.salience} />
         </Box>
       </CardActionArea>
