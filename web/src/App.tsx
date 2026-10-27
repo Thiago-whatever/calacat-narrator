@@ -5,6 +5,7 @@ import { DragGhost } from './components/feed/DragGhost'
 import type { FeedItem } from './components/feed/FeedCard'
 import type { MatchChip } from './components/feed/FeedFilters'
 import { InsightFeed } from './components/feed/InsightFeed'
+import { OverlayView } from './components/overlay/OverlayView'
 import { Header } from './components/header/Header'
 import { ConsoleMain, ConsoleRoot, MonitorColumn, MonitorFit } from './components/layout/ConsoleLayout'
 import { EditableCard, StaticCard } from './components/monitor/OnScreenCard'
@@ -13,6 +14,7 @@ import { LiveRegion } from './components/ui/primitives'
 import { Toast } from './components/ui/Toast'
 import { startMessage, useMatchStarter } from './data/kickoff'
 import { MATCH_ID_PATTERN, useLiveSource, type LiveStatus } from './data/live'
+import { onAirState, openOnAirChannel } from './data/onAirChannel'
 import { useDemoSource, type DemoRun } from './data/useDemoSource'
 import { useFeedDrag, useNow, usePrefs } from './hooks'
 import { minutes, STRINGS, topicLabel } from './i18n'
@@ -28,6 +30,36 @@ const TOAST_MS = 4000
 function liveMatchFromUrl(): string | null {
   const match = new URLSearchParams(window.location.search).get('match')
   return API_BASE && match && MATCH_ID_PATTERN.test(match) ? match : null
+}
+
+const OUTPUT_ID_PATTERN = /^o[0-9]{1,2}$/
+
+/** `?overlay=o1` shows only the card on air for that output (C14), fed by the console in another tab. */
+function overlayFromUrl(): string | null {
+  const id = new URLSearchParams(window.location.search).get('overlay')
+  return id && OUTPUT_ID_PATTERN.test(id) ? id : null
+}
+
+/** Same page with `overlay` set (or removed), keeping `?match=`. */
+function viewHref(overlay: string | null): string {
+  const params = new URLSearchParams(window.location.search)
+  if (overlay) params.set('overlay', overlay)
+  else params.delete('overlay')
+  const query = params.toString()
+  return query ? `?${query}` : window.location.pathname
+}
+
+function Overlay({ lang }: { lang: Lang }) {
+  const [output, setOutput] = useState(() => overlayFromUrl() ?? 'o1')
+  useEffect(() => {
+    document.documentElement.lang = lang
+    document.title = `Calacat Narrator · ${STRINGS[lang].overlay}`
+  }, [lang])
+  const choose = (id: string) => {
+    window.history.replaceState(null, '', viewHref(id))
+    setOutput(id)
+  }
+  return <OverlayView t={STRINGS[lang]} output={output} onOutput={choose} consoleHref={viewHref(null)} />
 }
 
 interface Starter {
@@ -60,6 +92,13 @@ export default function App() {
   const starter: Starter | undefined = API_BASE
     ? { busy: state.status === 'starting', message: startMessage(STRINGS[prefs.lang], state), onStart: start }
     : undefined
+  if (overlayFromUrl()) {
+    return (
+      <AppThemeProvider prefs={prefs.prefs}>
+        <Overlay lang={prefs.lang} />
+      </AppThemeProvider>
+    )
+  }
   return (
     <AppThemeProvider prefs={prefs.prefs}>
       {liveMatch ? <LiveConsole key={liveMatch} matchId={liveMatch} starter={starter} {...prefs} /> : <DemoConsole starter={starter} {...prefs} />}
@@ -104,6 +143,24 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
   useEffect(() => {
     if (s.pending && now >= s.pending.until) dispatch({ type: 'commit', now: Date.now() })
   }, [now, s.pending])
+
+  // The overlay view in another tab of this browser mirrors what's on air (C14); nothing leaves the browser.
+  const channel = useRef<ReturnType<typeof openOnAirChannel> | null>(null)
+  const latestState = useRef(() => onAirState(outputs, s.onAir, teams))
+  useEffect(() => {
+    latestState.current = () => onAirState(outputs, s.onAir, teams)
+    channel.current?.post(latestState.current())
+  }, [outputs, s.onAir, teams])
+  useEffect(() => {
+    const open = openOnAirChannel((message) => {
+      if (message.type === 'hello') open.post(latestState.current())
+    })
+    channel.current = open
+    return () => {
+      channel.current = null
+      open.close()
+    }
+  }, [])
 
   // Goals and other critical cards interrupt screen readers; ordinary additions use the feed's polite region.
   useEffect(() => {
@@ -255,6 +312,7 @@ function Console({ source, demo, liveStatus, lang, setLang, prefs, setPrefs, sta
           onToggle: toggleRun,
         }}
         liveStatus={liveText}
+        overlay={{ label: t.openOverlay, href: viewHref(s.output) }}
         start={starter && { label: t.startMatch, ...starter }}
         outputs={outputs.map((o) => ({ id: o.id, name: o.name, score: scoreLine(o.match), live: !!s.onAir[o.id], disabled: !!s.pending && o.id !== s.output }))}
         output={s.output}

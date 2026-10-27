@@ -17,6 +17,8 @@ interface Props {
   /** Demo only: Start / Pause / Resume / Restart drives the simulated clock. Omitted in live mode. */
   run?: { label: string; running: boolean; onToggle: () => void }
   liveStatus?: string
+  /** Opens the overlay view for the selected output in a new tab (C14). */
+  overlay: { label: string; href: string }
   /** Live builds only: starts a match on the server (C16); `message` is its status, announced politely. */
   start?: { label: string; busy: boolean; message: string; onStart: () => void }
   outputs: OutputOption[]
@@ -50,7 +52,7 @@ function Brand({ sub }: { sub: string }) {
   )
 }
 
-export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start, outputs, output, onOutput, period }: Props) {
+export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start, overlay, outputs, output, onOutput, period }: Props) {
   return (
     <Box
       component="header"
@@ -86,6 +88,7 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
             {start.message}
           </Typography>
         )}
+        <Button component="a" href={overlay.href} target="_blank" rel="noopener" sx={{ gridColumn: '1 / -1' }}>{overlay.label}</Button>
         {/* Switches the interface and the cards (English, or the Reviewer's Spanish), and is remembered. */}
         <SegmentedControl label={t.lang} hideLabel compact segments={LANGUAGES} value={lang} onChange={onLang} />
         <AccessibilityMenu

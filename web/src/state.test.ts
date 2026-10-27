@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mergeCards, parseLiveCard, toFeedCard } from './data/live'
+import { onAirState, openOnAirChannel, parseOnAirMessage } from './data/onAirChannel'
 import { readStartResponse, startMessage } from './data/kickoff'
 import { minutes, STRINGS } from './i18n'
 import { COUNTDOWN_MS, initialState, reducer, type Action, type ConsoleState } from './state'
@@ -116,6 +117,42 @@ describe('on-air minute', () => {
     [5400, '90’'],
   ])('%i s is %s', (seconds, minute) => {
     expect(minutes(seconds)).toBe(minute)
+  })
+})
+
+describe('overlay view (C14)', () => {
+  const team = { id: 'rio', name: 'Ríos FC', short: 'RIO', color: '#123456', ink: '#ffffff', soft: '#eeeeee' }
+  const outputs = [{ id: 'o1', name: 'TV 1', match: 'm1' }, { id: 'o2', name: 'TV 2', match: 'm1' }]
+
+  it('snapshots each output: go live shows the card, pull from air clears it', () => {
+    const live = onAirState(outputs, onAir(initialState('o1')).onAir, { rio: team })
+    expect(live).toMatchObject({ type: 'state', outputs: [{ id: 'o1', name: 'TV 1' }, { id: 'o2', name: 'TV 2' }] })
+    expect(live.type === 'state' && live.onAir).toEqual({
+      o1: { id: 'c1', card, team, geo: expect.objectContaining({ width: expect.any(Number) }), text },
+      o2: null,
+    })
+    const pulled = reducer(onAir(initialState('o1')), { type: 'pull', output: 'o1', message: '' })
+    expect(onAirState(outputs, pulled.onAir, { rio: team })).toMatchObject({ onAir: { o1: null, o2: null } })
+  })
+
+  it('drops malformed cards and unknown messages', () => {
+    expect(parseOnAirMessage({ type: 'state', outputs: [], onAir: { o1: { id: 'x' } } })).toEqual({ type: 'state', outputs: [], onAir: { o1: null } })
+    expect(parseOnAirMessage({ type: 'go-live' })).toBeNull()
+    expect(parseOnAirMessage('hello')).toBeNull()
+  })
+
+  it('answers a new overlay tab over BroadcastChannel', async () => {
+    const state = onAirState(outputs, onAir(initialState('o1')).onAir, { rio: team })
+    const consoleTab = openOnAirChannel((m) => m.type === 'hello' && consoleTab.post(state))
+    const received = new Promise((resolve) => {
+      const overlay = openOnAirChannel((m) => {
+        overlay.close()
+        resolve(m)
+      })
+      overlay.post({ type: 'hello' })
+    })
+    expect(await received).toEqual(state)
+    consoleTab.close()
   })
 })
 
