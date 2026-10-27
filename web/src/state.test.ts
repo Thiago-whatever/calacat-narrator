@@ -184,4 +184,9 @@ describe('translations', () => {
       if (typeof value === 'string') expect(slots(es[key] as string), key).toEqual(slots(value))
     }
   })
+
+  it('name the go-live button from its live label, not a hardcoded fragment', () => {
+    // Filled with e.g. "Go live on TV 1" / "Enviar a TV 1" in HelpDialog.
+    expect(STRINGS.en.helpStep3).toContain('{golive}')
+  })
 })

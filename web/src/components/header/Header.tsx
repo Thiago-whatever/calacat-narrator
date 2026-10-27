@@ -110,7 +110,13 @@ export function Header({ t, lang, onLang, prefs, onPrefs, run, liveStatus, start
         )}
         <Button component="a" href={overlay.href} target="_blank" rel="noopener" sx={{ gridColumn: '1 / -1' }}>{overlay.label}</Button>
         <ViewPrefs t={t} lang={lang} onLang={onLang} prefs={prefs} onPrefs={onPrefs}>
-          <HelpDialog t={t} demo={run && t.start} live={start && t.startMatch} overlay={overlay.label} />
+          <HelpDialog
+            t={t}
+            demo={run && t.start}
+            live={start && t.startMatch}
+            goLive={`${t.goLive} ${outputs.find((o) => o.id === output)?.name ?? ''}`.trim()}
+            overlay={overlay.label}
+          />
         </ViewPrefs>
       </Box>
     </Box>

@@ -106,7 +106,7 @@
   "helpStepsTitle": "Mandar una tarjeta al aire",
   "helpStep1": "Haz clic en una tarjeta del feed o arrástrala al monitor.",
   "helpStep2": "Muévela, cambia su tamaño o edítala. Es solo una vista previa hasta que la envíes.",
-  "helpStep3": "Pulsa Enviar a. Tienes 5 segundos para cancelar con Esc.",
+  "helpStep3": "Pulsa {golive}. Tienes 5 segundos para cancelar con Esc.",
   "helpStep4": "{overlay} abre en otra pestaña lo que ve la audiencia en la transmisión elegida.",
   "helpDone": "Entendido",
   "topics": {

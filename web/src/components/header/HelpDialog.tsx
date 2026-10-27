@@ -20,13 +20,15 @@ interface Props {
   demo?: string
   /** Label of the live-match button, when it is shown. */
   live?: string
+  /** Label of the go-live button for the selected output, e.g. "Go live on TV 1". */
+  goLive: string
   overlay: string
 }
 
 const fill = (text: string, label: string) => text.replace(/\{\w+\}/, `“${label}”`)
 
 /** "How it works": demo versus live match, and the steps to put a card on air. Esc or Got it closes it. */
-export function HelpDialog({ t, demo, live, overlay }: Props) {
+export function HelpDialog({ t, demo, live, goLive, overlay }: Props) {
   const [open, setOpen] = useState(firstVisit)
   const titleId = useId()
   const close = () => {
@@ -71,7 +73,7 @@ export function HelpDialog({ t, demo, live, overlay }: Props) {
           <Box component="ol" sx={{ m: 0, pl: 3, '& li + li': { mt: '4px' } }}>
             <li>{t.helpStep1}</li>
             <li>{t.helpStep2}</li>
-            <li>{t.helpStep3}</li>
+            <li>{fill(t.helpStep3, goLive)}</li>
             <li>{fill(t.helpStep4, overlay)}</li>
           </Box>
         </DialogContent>

@@ -106,7 +106,7 @@
   "helpStepsTitle": "Putting a card on air",
   "helpStep1": "Click a card in the insight feed, or drag it onto the monitor.",
   "helpStep2": "Move, resize or edit it. It is only a preview until you send it.",
-  "helpStep3": "Press Go live. You have 5 seconds to cancel with Esc.",
+  "helpStep3": "Press {golive}. You have 5 seconds to cancel with Esc.",
   "helpStep4": "{overlay} opens what viewers see for the chosen transmission in a new tab.",
   "helpDone": "Got it",
   "topics": {
