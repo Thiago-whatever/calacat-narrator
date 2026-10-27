@@ -6,13 +6,15 @@ Everything needed to submit by **Oct 27 2026, noon PT** (ADR-042). The order is:
 
 Do these in order. Each one depends on the step before it.
 
-1. **Secret scan of everything on GitHub** (the repo is about to become public). Scan `--remotes`, not `--all`: local-only refs such as the agent's checkpoints never get published.
+1. **Secret scan of everything on GitHub** (the repo is about to become public). Scan `--remotes`, not `--all`: local-only refs such as the agent's checkpoints never get published. GitHub also keeps a `refs/pull/<n>/head` ref for every pull request, merged or closed, even after its branch is deleted, and those become public too. A plain fetch skips them, so fetch them into `--remotes` first:
    ```bash
    git fetch --prune origin
+   git fetch origin '+refs/pull/*/head:refs/remotes/origin/pr/*'
    git log --remotes --name-only --format= | sort -u | grep -E '(^|/)\.env|match\.jsonl|\.pem$|\.pfx$' | grep -v '\.env\.example$'
    git grep -nIE 'AccountKey=|SharedAccessKey=|sig=[A-Za-z0-9%]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY|api[_-]?key\s*[:=]\s*\S{16,}' $(git rev-list --remotes)
    ```
-   Both should print nothing. If either finds something, stop. Rotate the secret first, then remove it from history, before going public.
+   Both should print nothing. If either finds something, stop. Rotate the secret first, then remove it from history, before going public. A hit that is only reachable through a `pr/*` ref can't be removed by rewriting branches: deleting PR refs needs GitHub Support, so rotating the secret is the fix.
+   One hit is known and expected: `match.jsonl` through `origin/pr/60` (commit `9aa92f1`, committed by mistake and removed before #60 was squash-merged). It is fictional simulator output plus a local `.claude/launch.json` dev-server config, and the content scan finds no secrets in it.
 2. **Make the repo public.** Settings → General → Danger Zone → Change visibility.
 3. **Turn on secret scanning and push protection.** Settings → Advanced Security.
 4. **Set up Pages.**
