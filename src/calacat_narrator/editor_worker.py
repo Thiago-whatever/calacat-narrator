@@ -8,6 +8,9 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from agent_framework import Agent
+from agent_framework.foundry import FoundryChatClient
+from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import DefaultAzureCredential
 from azure.servicebus import ServiceBusReceivedMessage, ServiceBusSubQueue
 from azure.servicebus.aio import (
@@ -17,9 +20,16 @@ from azure.servicebus.aio import (
 )
 from pydantic import ValidationError
 
-from .agent_runtime import Candidate, Card
+from .agent_runtime import Candidate, Card, FoundryReviewer
 from .cosmos import get_cards_container, persist_card
-from .editor import Editor, EditorConfig, fallback_candidate_card, fallback_card
+from .editor import (
+    Editor,
+    EditorConfig,
+    Reviewer,
+    fallback_candidate_card,
+    fallback_card,
+    review_card,
+)
 from .signals import Signal
 from .webpubsub import publish_cards
 
@@ -33,6 +43,8 @@ class EditorWorkerSettings:
     candidates_subscription: str
     signals_topic: str
     deadletter_subscriptions: tuple[str, ...]
+    foundry_project_endpoint: str
+    foundry_model: str
     focus: str | None = None
 
     @classmethod
@@ -61,6 +73,8 @@ class EditorWorkerSettings:
             candidates_subscription=required("SERVICEBUS_EDITOR_SUBSCRIPTION_NAME"),
             signals_topic=required("SERVICEBUS_TOPIC_NAME"),
             deadletter_subscriptions=deadletter_subscriptions,
+            foundry_project_endpoint=required("FOUNDRY_PROJECT_ENDPOINT"),
+            foundry_model=required("FOUNDRY_MODEL"),
             focus=values.get("EDITOR_FOCUS"),
         )
 
@@ -72,6 +86,7 @@ async def process_candidate_message(
     pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
     *,
     now: datetime | None = None,
+    reviewer: Reviewer | None = None,
 ) -> None:
     try:
         candidate = Candidate.model_validate_json(_message_body(message))
@@ -93,13 +108,15 @@ async def process_candidate_message(
 
     if submission.immediate_card is not None:
         try:
-            _store_card(submission.immediate_card)
+            stored = await _review_and_store(submission.immediate_card, editor, reviewer)
         except Exception:
-            logger.exception("Failed to persist critical card %s", submission.immediate_card.card_id)
+            logger.exception(
+                "Failed to persist critical card %s", submission.immediate_card.card_id
+            )
             editor.remove(candidate.candidate_id)
             await receiver.abandon_message(message)
             return
-        editor.mark_published(candidate.candidate_id, now=now)
+        _settle(editor, candidate.candidate_id, stored, now=now)
         await receiver.complete_message(message)
         return
 
@@ -143,6 +160,7 @@ async def process_candidate_deadletter_message(
     pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
     *,
     now: datetime | None = None,
+    reviewer: Reviewer | None = None,
 ) -> None:
     try:
         candidate = Candidate.model_validate_json(_message_body(message))
@@ -181,6 +199,7 @@ async def _submit_fallback_card(
         entity_ids=card.entity_ids,
         team_id=card.team_id,
         player_id=card.player_id,
+        body_part=card.body_part,
         topic=card.topic,
         self_salience=card.salience,
         ttl_s=card.ttl_s,
@@ -194,12 +213,14 @@ async def _submit_fallback_card(
             await dropped[0].complete_message(dropped[1])
     if submission.immediate_card is not None:
         try:
-            _store_card(submission.immediate_card)
+            stored = await _review_and_store(submission.immediate_card, editor, None)
         except Exception:
-            logger.exception("Failed to persist fallback card %s", submission.immediate_card.card_id)
+            logger.exception(
+                "Failed to persist fallback card %s", submission.immediate_card.card_id
+            )
             await receiver.abandon_message(message)
             return
-        editor.mark_published(candidate.candidate_id, now=now)
+        _settle(editor, candidate.candidate_id, stored, now=now)
         await receiver.complete_message(message)
     elif submission.accepted:
         pending[candidate.candidate_id] = (receiver, message)
@@ -216,6 +237,7 @@ async def process_message(
     pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]],
     *,
     now: datetime,
+    reviewer: Reviewer | None = None,
 ) -> None:
     """Route one message; a failure settles that message instead of stopping the Editor.
 
@@ -230,7 +252,9 @@ async def process_message(
                 receiver, message, editor, config, pending, now=now
             )
         else:
-            await process_candidate_message(receiver, message, editor, pending, now=now)
+            await process_candidate_message(
+                receiver, message, editor, pending, now=now, reviewer=reviewer
+            )
     except Exception:
         logger.exception("Editor failed on %s message %s; settling it", route, message.message_id)
         try:
@@ -250,6 +274,7 @@ async def consume_editor(
     receivers: list[tuple[ServiceBusReceiver, str]],
     editor: Editor,
     config: EditorConfig,
+    reviewer: Reviewer | None,
 ) -> None:
     """Keep deferred candidates locked until they are stored or intentionally dropped."""
     pending: dict[str, tuple[ServiceBusReceiver, ServiceBusReceivedMessage]] = {}
@@ -266,7 +291,14 @@ async def consume_editor(
                 for message in messages:
                     renewer.register(receiver, message)
                     await process_message(
-                        receiver, route, message, editor, config, pending, now=current
+                        receiver,
+                        route,
+                        message,
+                        editor,
+                        config,
+                        pending,
+                        now=current,
+                        reviewer=reviewer,
                     )
 
             for candidate_id in editor.expire_queue(now=current):
@@ -282,25 +314,47 @@ async def consume_editor(
                 editor.remove(card.candidate_id)
                 continue
             try:
-                _store_card(card)
+                stored = await _review_and_store(card, editor, reviewer)
             except Exception:
                 logger.exception("Failed to persist Editor card %s", card.card_id)
                 editor.remove(card.candidate_id)
                 pending.pop(card.candidate_id, None)
                 await source[0].abandon_message(source[1])
                 continue
-            editor.mark_published(card.candidate_id, now=current)
+            _settle(editor, card.candidate_id, stored, now=current)
             pending.pop(card.candidate_id, None)
             await source[0].complete_message(source[1])
+
+
+def create_reviewer_agent(
+    settings: EditorWorkerSettings,
+    credential: AsyncTokenCredential,
+) -> Agent:
+    return Agent(
+        client=FoundryChatClient(
+            project_endpoint=settings.foundry_project_endpoint,
+            model=settings.foundry_model,
+            credential=credential,
+        ),
+        name="reviewer",
+        instructions=(
+            "You review live football captions before they go on air, and translate them "
+            "into Spanish. Use only the facts you are given."
+        ),
+    )
 
 
 async def run_editor(settings: EditorWorkerSettings) -> None:
     config = EditorConfig.load()
     editor = Editor(config, focus=settings.focus)
-    async with DefaultAzureCredential() as credential, ServiceBusClient(
-        fully_qualified_namespace=settings.servicebus_namespace,
-        credential=credential,
-    ) as client, AsyncExitStack() as stack:
+    async with (
+        DefaultAzureCredential() as credential,
+        ServiceBusClient(
+            fully_qualified_namespace=settings.servicebus_namespace,
+            credential=credential,
+        ) as client,
+        AsyncExitStack() as stack,
+    ):
         receivers: list[tuple[ServiceBusReceiver, str]] = []
         candidate_receiver = client.get_subscription_receiver(
             topic_name=settings.candidates_topic,
@@ -338,11 +392,40 @@ async def run_editor(settings: EditorWorkerSettings) -> None:
                     "signal_dlq",
                 )
             )
-        await consume_editor(receivers, editor, config)
+        reviewer_agent = await stack.enter_async_context(
+            create_reviewer_agent(settings, credential)
+        )
+        await consume_editor(receivers, editor, config, FoundryReviewer(reviewer_agent))
+
+
+async def _review_and_store(card: Card, editor: Editor, reviewer: Reviewer | None) -> bool:
+    """Review (or localize a fallback), then store. False means the Reviewer rejected it."""
+    config = editor.config
+    critical = card.topic in config.critical_topics
+    final = await review_card(
+        card,
+        reviewer,
+        timeout_s=config.critical_review_timeout_s if critical else config.review_timeout_s,
+        critical_topics=config.critical_topics,
+    )
+    if final is None:
+        return False
+    _store_card(final)
+    return True
+
+
+def _settle(editor: Editor, candidate_id: str, stored: bool, *, now: datetime | None) -> None:
+    """A stored card uses the publish slot; a rejected one leaves the slot free."""
+    if stored:
+        editor.mark_published(candidate_id, now=now)
+    else:
+        editor.remove(candidate_id)
 
 
 def _store_card(card: Card) -> None:
     """Persist, then push to browsers. A failed push only logs: the card is already stored."""
+    if card.i18n is None:
+        raise ValueError(f"card {card.card_id} has no Spanish text and must not be published")
     persist_card(get_cards_container(), card)
     try:
         publish_cards([card])

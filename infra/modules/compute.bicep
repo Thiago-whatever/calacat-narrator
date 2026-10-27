@@ -188,6 +188,14 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
               value: containerAppsIdentity.properties.clientId
             }
             {
+              name: 'FOUNDRY_PROJECT_ENDPOINT'
+              value: foundryProjectEndpoint
+            }
+            {
+              name: 'FOUNDRY_MODEL'
+              value: foundryModelDeploymentName
+            }
+            {
               name: 'SERVICEBUS_FULLY_QUALIFIED_NAMESPACE'
               value: '${serviceBusNamespaceName}.servicebus.windows.net'
             }

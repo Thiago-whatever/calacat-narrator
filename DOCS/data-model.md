@@ -164,6 +164,21 @@ match clock. Push consumers should filter cards by `expires_at` rather than rely
 Cosmos TTL deletion notifications, use a `match-{match_id}` Web PubSub group, and
 deduplicate deliveries by `card_id`.
 
+**Review and Spanish (ADR-039, ADR-040).** After the Editor's budget picks a specialist
+card, and before it is stored, a **Reviewer** agent on `narrator-chat` (low reasoning
+effort, structured response) gets the same plain facts and the draft, and returns
+`{decision: approve|revise|reject, headline, body, es: {headline, body}}`. Both languages
+obey the 60/180 limits and the caption validator (which also rejects Spanish words such
+as *datos*, *señal* or *segundos*), every number must appear in the facts, and each body
+must give the minute. `approve` and `revise` store and push the reviewed card; `reject`
+drops a non-critical card and frees the publish slot, but a critical card (`goal`,
+`red_card`, `penalty`) is never dropped and publishes the template instead. A timeout
+(`review_timeout_s` in `editor.yaml`, or the shorter `critical_review_timeout_s` for
+critical topics), an error, or invalid output publishes the templated fallback card
+instead. Fallback cards are written from EN and ES templates and are never reviewed.
+Every stored card carries `i18n.es`; `score` (goals per team after the event) and, for
+shots, `body_part` (`foot` / `head` / `other`) travel from the signal.
+
 ```json
 {
   "id": "stable-card-uuid",
@@ -171,13 +186,17 @@ deduplicate deliveries by `card_id`.
   "candidate_id": "candidate-uuid",
   "signal_id": "signal-uuid",
   "match_id": "m-0007",
-  "headline": "A second goal changes the balance",
-  "body": "The home side has now scored twice.",
-  "metrics": { "goal": 2 },
+  "headline": "Bram Elsen doubles the lead",
+  "body": "68' Bram Elsen scores with a 104 km/h strike. It's 2-0 to Northbridge Comets.",
+  "i18n": { "es": { "headline": "Bram Elsen amplía la ventaja",
+    "body": "68' Bram Elsen marca con un remate a 104 km/h. Northbridge Comets gana 2-0." } },
+  "metrics": { "goal": 2, "shot_speed_kmh": 104 },
   "evidence_event_ids": ["evt-0042"],
   "entity_ids": ["t-home"],
   "team_id": "t-home",
   "player_id": "p-nbr-09",
+  "score": { "t-home": 2 },
+  "body_part": "foot",
   "topic": "goal",
   "salience": 1.0,
   "source": "specialist",
