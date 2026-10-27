@@ -16,15 +16,19 @@ export interface Geo {
 }
 
 // Both carry a snapshot of the card, so what's on air still renders after the feed drops it.
+// `h`/`b` are the text in the reporter's language; `en` is what viewers get (the output is
+// English only), both frozen at send, so nothing reaches air without the countdown.
 export interface AirCard extends Geo, CardText {
   id: string
   card: FeedCard
+  en: CardText
   since: number
 }
 
 export interface Pending extends Geo, CardText {
   id: string
   card: FeedCard
+  en: CardText
   output: string
   until: number
 }
@@ -52,7 +56,7 @@ export type Action =
   | { type: 'setGeo'; geo: Partial<Geo> }
   | { type: 'setSize'; width: number }
   | { type: 'edit'; key: string; text: CardText }
-  | { type: 'send'; card: FeedCard; text: CardText; now: number; message: string }
+  | { type: 'send'; card: FeedCard; text: CardText; en: CardText; now: number; message: string }
   | { type: 'cancel'; message: string }
   | { type: 'commit'; now: number }
   | { type: 'pull'; output?: string; message: string }
@@ -112,7 +116,7 @@ export function reducer(s: ConsoleState, a: Action): ConsoleState {
       if (a.card.expiresAt !== undefined && a.card.expiresAt <= a.now) return s
       return {
         ...s,
-        pending: { ...s.geo, ...a.text, id: s.selected, card: a.card, output: s.output, until: a.now + COUNTDOWN_MS },
+        pending: { ...s.geo, ...a.text, id: s.selected, card: a.card, en: a.en, output: s.output, until: a.now + COUNTDOWN_MS },
         polite: a.message,
         toast: null,
       }

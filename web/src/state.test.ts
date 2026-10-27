@@ -12,11 +12,11 @@ const feedCard = (id: string, expiresAt?: number): FeedCard => ({
 })
 const card = feedCard('c1')
 const run = (actions: Action[], start: ConsoleState = initialState('o1')) => actions.reduce(reducer, start)
-const onAir = (s: ConsoleState) => run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, now: 0, message: '' }, { type: 'commit', now: 1 }], s)
+const onAir = (s: ConsoleState) => run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, en: text, now: 0, message: '' }, { type: 'commit', now: 1 }], s)
 
 describe('console reducer', () => {
   it('sends a card through a cancellable countdown, then locks it on air', () => {
-    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, now: 100, message: 'going' }])
+    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, en: text, now: 100, message: 'going' }])
     expect(pending.pending).toMatchObject({ id: 'c1', output: 'o1', until: 100 + COUNTDOWN_MS })
 
     expect(reducer(pending, { type: 'cancel', message: 'cancelled' }).pending).toBeNull()
@@ -31,7 +31,7 @@ describe('console reducer', () => {
   })
 
   it('blocks output switching and selection during a countdown', () => {
-    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, now: 0, message: '' }])
+    const pending = run([{ type: 'select', id: 'c1' }, { type: 'send', card, text, en: text, now: 0, message: '' }])
     expect(reducer(pending, { type: 'setOutput', output: 'o2' }).output).toBe('o1')
     expect(reducer(pending, { type: 'select', id: 'c2' }).selected).toBe('c1')
   })
@@ -39,8 +39,8 @@ describe('console reducer', () => {
   it('refuses to send an expired card', () => {
     const selected = run([{ type: 'select', id: 'old' }])
     const stale = feedCard('old', 1000)
-    expect(reducer(selected, { type: 'send', card: stale, text, now: 1000, message: '' })).toBe(selected)
-    expect(reducer(selected, { type: 'send', card: stale, text, now: 999, message: '' }).pending?.id).toBe('old')
+    expect(reducer(selected, { type: 'send', card: stale, text, en: text, now: 1000, message: '' })).toBe(selected)
+    expect(reducer(selected, { type: 'send', card: stale, text, en: text, now: 999, message: '' }).pending?.id).toBe('old')
   })
 
   it('pulls only the targeted output', () => {
@@ -135,6 +135,24 @@ describe('overlay view (C14)', () => {
     expect(onAirState(outputs, pulled.onAir, { rio: team })).toMatchObject({ onAir: { o1: null, o2: null } })
   })
 
+  it('sends viewers the English text frozen at send, never a later edit', () => {
+    const english = { h: 'English headline', b: 'English body' }
+    const spanish = { h: 'Titular', b: 'Cuerpo' }
+    const live = run([
+      { type: 'select', id: 'c1' },
+      { type: 'send', card, text: spanish, en: english, now: 0, message: '' },
+      { type: 'commit', now: 1 },
+      // After go-live, the reporter edits the same card's English text from another output.
+      { type: 'setOutput', output: 'o2' },
+      { type: 'select', id: 'c1' },
+      { type: 'edit', key: 'c1:en', text: { h: 'Unsent edit', b: 'Never aired' } },
+    ])
+
+    const state = onAirState(outputs, live.onAir, { rio: team })
+    expect(state.type === 'state' && state.onAir.o1?.text).toEqual(english)
+    expect(live.onAir.o1).toMatchObject({ h: 'Titular', en: english })
+  })
+
   it('drops malformed cards and unknown messages', () => {
     expect(parseOnAirMessage({ type: 'state', outputs: [], onAir: { o1: { id: 'x' } } })).toEqual({ type: 'state', outputs: [], onAir: { o1: null } })
     expect(parseOnAirMessage({ type: 'go-live' })).toBeNull()
@@ -172,5 +190,21 @@ describe('start a match (C16)', () => {
   it('shows the busy message with minutes', () => {
     expect(startMessage(STRINGS.en, { status: 'busy', retryMin: 6 })).toBe('Two matches are already running. Try again in 6 min.')
     expect(startMessage(STRINGS.es, { status: 'idle' })).toBe('')
+  })
+})
+
+describe('translations', () => {
+  it('keep the same placeholders in English and Spanish', () => {
+    const slots = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
+    const { en, es } = STRINGS
+    for (const key of Object.keys(en) as (keyof typeof en)[]) {
+      const value = en[key]
+      if (typeof value === 'string') expect(slots(es[key] as string), key).toEqual(slots(value))
+    }
+  })
+
+  it('name the go-live button from its live label, not a hardcoded fragment', () => {
+    // Filled with e.g. "Go live on TV 1" / "Enviar a TV 1" in HelpDialog.
+    expect(STRINGS.en.helpStep3).toContain('{golive}')
   })
 })

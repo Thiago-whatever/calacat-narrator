@@ -24,7 +24,7 @@ Do these in order. Each one depends on the step before it.
    - `azd deploy`: the Function key on `/api/ingest` (#61) and `POST /api/matches` (C16, #68) are Function code.
 7. **Logged-out check**, in a private window with no GitHub session:
    - The repo page and README load. The Mermaid diagram renders.
-   - https://thiago-whatever.github.io/calacat-narrator/ loads. Start match → go live → pull works, and Open overlay works.
+   - https://thiago-whatever.github.io/calacat-narrator/ loads. Start match → go live → pull works, and **Open on-air output** shows the card with the ON AIR tally.
    - A live match shows cards. Use **Start a match** (the judges' path). The README's simulator option needs your Function key, so it only works for you or in a reader's own subscription.
    - The video link plays without signing in.
 8. **Submit** the form with the text below. Then remove the TODO in the README if C16 is live.
