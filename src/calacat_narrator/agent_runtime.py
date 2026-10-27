@@ -174,6 +174,11 @@ def signal_team_id(signal: Signal) -> str:
     return club_id
 
 
+def signal_body_part(signal: Signal) -> Literal["foot", "head", "other"] | None:
+    shot = signal.event_context if isinstance(signal.event_context, ShotEventContext) else None
+    return shot.body_part if shot else None
+
+
 def signal_player_id(signal: Signal) -> str | None:
     if isinstance(signal.event_context, ShotEventContext) and signal.event_context.player_id:
         return signal.event_context.player_id
@@ -238,6 +243,8 @@ class Candidate(BaseModel):
     team_id: TeamId
     player_id: PlayerId | None = None
     score: dict[TeamId, int] = Field(default_factory=dict)
+    # Kept so templates and the Reviewer can say "header" instead of a vaguer "finish".
+    body_part: Literal["foot", "head", "other"] | None = None
     topic: str = Field(min_length=1, max_length=64)
     self_salience: float = Field(ge=0, le=1)
     ttl_s: int = Field(default=DEFAULT_CARD_TTL_S, ge=1, le=300)
@@ -261,6 +268,7 @@ class Card(BaseModel):
     team_id: TeamId
     player_id: PlayerId | None = None
     score: dict[TeamId, int] = Field(default_factory=dict)
+    body_part: Literal["foot", "head", "other"] | None = None
     i18n: CardI18n | None = None
     topic: str = Field(min_length=1, max_length=64)
     salience: float = Field(ge=0, le=1)
@@ -300,6 +308,7 @@ class Card(BaseModel):
             entity_ids=candidate.entity_ids,
             team_id=candidate.team_id,
             player_id=candidate.player_id,
+            body_part=candidate.body_part,
             score=candidate.score,
             topic=candidate.topic,
             salience=candidate.self_salience,
@@ -366,6 +375,7 @@ class FoundryCandidateGenerator:
             entity_ids=list(signal.entity.values()),
             team_id=signal_team_id(signal),
             player_id=signal_player_id(signal),
+            body_part=signal_body_part(signal),
             score=signal.score,
             topic=signal.kind,
             self_salience=draft.self_salience,
@@ -396,7 +406,7 @@ def _candidate_prompt(specialist: str) -> str:
 # ---- Review (ADR-039, ADR-040)
 
 
-def card_facts(card: Card, lang: Lang = "en", body_part: str | None = None) -> dict[str, str]:
+def card_facts(card: Card, lang: Lang = "en") -> dict[str, str]:
     """The same plain facts, rebuilt from a card's application-owned fields."""
     speed = card.metrics.get("shot_speed_kmh")
     return event_facts(
@@ -407,7 +417,7 @@ def card_facts(card: Card, lang: Lang = "en", body_part: str | None = None) -> d
         player_id=card.player_id,
         score=card.score,
         speed_kmh=float(speed) if speed is not None else None,
-        body_part=body_part,
+        body_part=card.body_part,
         lang=lang,
     )
 

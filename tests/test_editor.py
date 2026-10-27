@@ -259,8 +259,17 @@ def decision(
     )
 
 
-def review(reviewer, card: Card | None = None, timeout_s: float = 1) -> Card | None:
-    return asyncio.run(review_card(card or specialist_goal_card(), reviewer, timeout_s=timeout_s))
+def review(
+    reviewer, card: Card | None = None, timeout_s: float = 1, critical_topics: tuple[str, ...] = ()
+) -> Card | None:
+    return asyncio.run(
+        review_card(
+            card or specialist_goal_card(),
+            reviewer,
+            timeout_s=timeout_s,
+            critical_topics=critical_topics,
+        )
+    )
 
 
 def test_reviewer_approve_publishes_reviewed_bilingual_card() -> None:
@@ -285,8 +294,40 @@ def test_reviewer_revise_replaces_the_draft_text() -> None:
     assert card.body != specialist_goal_card().body
 
 
-def test_reviewer_reject_drops_the_card() -> None:
+def test_reviewer_reject_drops_a_non_critical_card() -> None:
     assert review(FakeReviewer(decision("reject"))) is None
+
+
+def test_reviewer_reject_of_a_critical_card_publishes_the_template() -> None:
+    critical = tuple(EditorConfig.load().critical_topics)
+
+    card = review(FakeReviewer(decision("reject")), critical_topics=critical)
+
+    assert card is not None and card.source == "fallback"
+    assert card.headline == "Bram Elsen scores for Northbridge Comets"
+    assert card.i18n is not None
+
+
+def test_body_part_travels_from_signal_to_card_and_its_captions() -> None:
+    signal = make_goal_signal()
+    header = signal.model_copy(
+        update={"event_context": signal.event_context.model_copy(update={"body_part": "head"})}
+    )
+
+    card = fallback_card(header, EditorConfig.load(), now=datetime(2026, 10, 25, tzinfo=UTC))
+
+    assert card.body_part == "head"
+    assert "104 km/h header" in card.body
+    assert card.i18n is not None and "un cabezazo a 104 km/h" in card.i18n.es.body
+
+
+def test_reviewer_sees_the_body_part_stored_on_the_card() -> None:
+    reviewer = FakeReviewer(decision("reject"))
+    header_card = specialist_goal_card().model_copy(update={"body_part": "head"})
+
+    review(reviewer, header_card)
+
+    assert reviewer.facts["detail"] == "a 104 km/h header"
 
 
 @pytest.mark.parametrize(

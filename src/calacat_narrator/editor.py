@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 from math import exp, log
@@ -20,6 +21,7 @@ from .agent_runtime import (
     Lang,
     ReviewDecision,
     card_facts,
+    signal_body_part,
     signal_player_id,
     signal_team_id,
 )
@@ -43,6 +45,8 @@ class EditorConfig(BaseModel):
     focus_match_relevance: float = Field(ge=0, le=1)
     focus_other_relevance: float = Field(ge=0, le=1)
     review_timeout_s: float = Field(gt=0, le=30)
+    # Goals must reach air within ~5 s (ADR-038/039), so critical reviews give up sooner.
+    critical_review_timeout_s: float = Field(gt=0, le=30)
 
     @field_validator("topic_weights", "topic_rarity")
     @classmethod
@@ -321,10 +325,10 @@ def template_caption(kind: str, facts: dict[str, str], lang: Lang = "en") -> tup
     )
 
 
-def localized_fallback_card(card: Card, body_part: str | None = None) -> Card:
+def localized_fallback_card(card: Card) -> Card:
     """The templated card in English with its Spanish translation; never needs a model."""
-    headline, body = template_caption(card.topic, card_facts(card, "en", body_part), "en")
-    es_headline, es_body = template_caption(card.topic, card_facts(card, "es", body_part), "es")
+    headline, body = template_caption(card.topic, card_facts(card, "en"), "en")
+    es_headline, es_body = template_caption(card.topic, card_facts(card, "es"), "es")
     return Card.model_validate(
         {
             **card.model_dump(),
@@ -355,16 +359,15 @@ def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None 
         entity_ids=list(signal.entity.values()),
         team_id=signal_team_id(signal),
         player_id=signal_player_id(signal),
+        body_part=signal_body_part(signal),
         score=signal.score,
         topic=signal.kind,
         self_salience=1.0,
         ttl_s=min(config.default_ttl_s, config.max_ttl_s),
         match_clock_s=signal.match_clock_s,
     )
-    shot = signal.event_context if isinstance(signal.event_context, ShotEventContext) else None
     return localized_fallback_card(
-        Card.from_candidate(candidate, created_at=created_at, source="fallback"),
-        body_part=shot.body_part if shot else None,
+        Card.from_candidate(candidate, created_at=created_at, source="fallback")
     )
 
 
@@ -412,8 +415,17 @@ def check_against_facts(card: Card, facts: dict[str, str]) -> None:
         raise ValueError("reviewed text must give the minute in both languages")
 
 
-async def review_card(card: Card, reviewer: Reviewer | None, *, timeout_s: float) -> Card | None:
-    """Approve or revise to a reviewed bilingual card, reject to None, or fall back on failure."""
+async def review_card(
+    card: Card,
+    reviewer: Reviewer | None,
+    *,
+    timeout_s: float,
+    critical_topics: Collection[str] = (),
+) -> Card | None:
+    """Approve or revise to a reviewed bilingual card, reject to None, or fall back on failure.
+
+    A critical card (goal, red card, penalty) is never dropped: a reject publishes the template.
+    """
     if card.source == "fallback" and card.i18n is not None:
         return card
     if card.source == "fallback" or reviewer is None:
@@ -422,6 +434,11 @@ async def review_card(card: Card, reviewer: Reviewer | None, *, timeout_s: float
     try:
         decision = await asyncio.wait_for(reviewer.review(card, facts), timeout_s)
         if decision.decision == "reject":
+            if card.topic in critical_topics:
+                logger.warning(
+                    "Reviewer rejected critical card %s; using the fallback", card.card_id
+                )
+                return localized_fallback_card(card)
             logger.info("Reviewer rejected card %s", card.card_id)
             return None
         reviewed = Card.model_validate(

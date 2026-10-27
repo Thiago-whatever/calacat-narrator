@@ -171,10 +171,13 @@ effort, structured response) gets the same plain facts and the draft, and return
 obey the 60/180 limits and the caption validator (which also rejects Spanish words such
 as *datos*, *señal* or *segundos*), every number must appear in the facts, and each body
 must give the minute. `approve` and `revise` store and push the reviewed card; `reject`
-drops it and frees the publish slot; a timeout (`review_timeout_s` in `editor.yaml`), an
-error, or invalid output publishes the templated fallback card instead. Fallback cards
-are written from EN and ES templates and are never reviewed. Every stored card carries
-`i18n.es`, and `score` (goals per team after the event) travels from the signal.
+drops a non-critical card and frees the publish slot, but a critical card (`goal`,
+`red_card`, `penalty`) is never dropped and publishes the template instead. A timeout
+(`review_timeout_s` in `editor.yaml`, or the shorter `critical_review_timeout_s` for
+critical topics), an error, or invalid output publishes the templated fallback card
+instead. Fallback cards are written from EN and ES templates and are never reviewed.
+Every stored card carries `i18n.es`; `score` (goals per team after the event) and, for
+shots, `body_part` (`foot` / `head` / `other`) travel from the signal.
 
 ```json
 {
@@ -193,6 +196,7 @@ are written from EN and ES templates and are never reviewed. Every stored card c
   "team_id": "t-home",
   "player_id": "p-nbr-09",
   "score": { "t-home": 2 },
+  "body_part": "foot",
   "topic": "goal",
   "salience": 1.0,
   "source": "specialist",

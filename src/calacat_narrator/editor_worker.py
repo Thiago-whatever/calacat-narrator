@@ -199,6 +199,7 @@ async def _submit_fallback_card(
         entity_ids=card.entity_ids,
         team_id=card.team_id,
         player_id=card.player_id,
+        body_part=card.body_part,
         topic=card.topic,
         self_salience=card.salience,
         ttl_s=card.ttl_s,
@@ -399,7 +400,14 @@ async def run_editor(settings: EditorWorkerSettings) -> None:
 
 async def _review_and_store(card: Card, editor: Editor, reviewer: Reviewer | None) -> bool:
     """Review (or localize a fallback), then store. False means the Reviewer rejected it."""
-    final = await review_card(card, reviewer, timeout_s=editor.config.review_timeout_s)
+    config = editor.config
+    critical = card.topic in config.critical_topics
+    final = await review_card(
+        card,
+        reviewer,
+        timeout_s=config.critical_review_timeout_s if critical else config.review_timeout_s,
+        critical_topics=config.critical_topics,
+    )
     if final is None:
         return False
     _store_card(final)
