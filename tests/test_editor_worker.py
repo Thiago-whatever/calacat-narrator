@@ -22,6 +22,7 @@ def candidate_json() -> bytes:
             metrics={"shot_volume": 5},
             evidence_event_ids=["evt-1"],
             entity_ids=["t-home"],
+            team_id="t-home",
             topic="shot_volume",
             self_salience=0.8,
             match_clock_s=1000,
@@ -119,7 +120,11 @@ def test_candidate_is_held_until_queued_card_can_be_persisted(
 
     asyncio.run(
         editor_worker.process_candidate_message(
-            receiver, message, editor, pending, now=now  # type: ignore[arg-type]
+            receiver,
+            message,
+            editor,
+            pending,
+            now=now,  # type: ignore[arg-type]
         )
     )
 
@@ -133,9 +138,7 @@ def test_critical_candidate_is_completed_only_after_card_persistence(
 ) -> None:
     receiver = FakeReceiver()
     message = FakeMessage(
-        candidate_json()
-        .replace(b"shot_volume", b"goal")
-        .replace(b"candidate-1", b"candidate-goal")
+        candidate_json().replace(b"shot_volume", b"goal").replace(b"candidate-1", b"candidate-goal")
     )
     container = FakeContainer()
     monkeypatch.setattr(editor_worker, "get_cards_container", lambda: container)
@@ -238,7 +241,7 @@ def test_deadletter_candidate_is_replaced_with_template_card() -> None:
     assert card.candidate_id != "candidate-1"
     assert card.signal_id == "signal-1"
     assert card.evidence_event_ids == ["evt-1"]
-    assert "verified shot_volume is 5" in card.body
+    assert "Northbridge Comets have now taken 5 shots" in card.body
 
 
 def test_editor_worker_settings_require_candidate_and_dlq_routes() -> None:
@@ -278,14 +281,16 @@ def test_stored_card_is_pushed_and_a_failed_push_still_completes(
     monkeypatch.setattr(editor_worker, "publish_cards", failing_push)
     receiver = FakeReceiver()
     message = FakeMessage(
-        candidate_json()
-        .replace(b"shot_volume", b"goal")
-        .replace(b"candidate-1", b"candidate-goal")
+        candidate_json().replace(b"shot_volume", b"goal").replace(b"candidate-1", b"candidate-goal")
     )
 
     asyncio.run(
         editor_worker.process_candidate_message(
-            receiver, message, Editor(EditorConfig.load()), {}, now=datetime(2026, 10, 25, tzinfo=UTC)
+            receiver,
+            message,
+            Editor(EditorConfig.load()),
+            {},
+            now=datetime(2026, 10, 25, tzinfo=UTC),
         )
     )
 

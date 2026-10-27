@@ -179,6 +179,8 @@ async def _submit_fallback_card(
         metrics=card.metrics,
         evidence_event_ids=card.evidence_event_ids,
         entity_ids=card.entity_ids,
+        team_id=card.team_id,
+        player_id=card.player_id,
         topic=card.topic,
         self_salience=card.salience,
         ttl_s=card.ttl_s,

@@ -68,8 +68,8 @@ def create_candidate_agent(
         ),
         name=settings.agent_name,
         instructions=(
-            "You create brief, evidence-grounded candidate narratives for live football. "
-            "Only describe the supplied signal; do not calculate or infer statistics."
+            "You write short broadcast captions for live football. Look up the moment with "
+            "your facts tool and describe only those facts; do not calculate or infer statistics."
         ),
     )
 

@@ -1,7 +1,9 @@
 from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_URL, uuid5
 
-from calacat_narrator.agent_runtime import Candidate
+import pytest
+
+from calacat_narrator.agent_runtime import BODY_MAX, HEADLINE_MAX, Candidate
 from calacat_narrator.editor import Editor, EditorConfig, fallback_card
 from calacat_narrator.signals import ShotEventContext, Signal
 
@@ -17,11 +19,12 @@ def make_candidate(
         candidate_id=candidate_id,
         signal_id=f"signal-{candidate_id}",
         match_id="m-0007",
-        headline=f"{topic} update",
+        headline=f"{topic.replace('_', ' ')} update",
         why_it_matters="A verified match update.",
         metrics={topic: 5},
         evidence_event_ids=[f"evt-{candidate_id}"],
         entity_ids=["t-home"],
+        team_id="t-home",
         topic=topic,
         self_salience=self_salience,
         ttl_s=240,
@@ -41,10 +44,12 @@ def make_goal_signal() -> Signal:
         event_context=ShotEventContext(
             event_id="evt-goal-1",
             period=2,
+            player_id="p-nbr-09",
             outcome="goal",
             speed_kmh=104,
             body_part="foot",
         ),
+        score={"t-home": 2},
         tier=1,
     )
 
@@ -152,3 +157,44 @@ def test_deadletter_fallback_is_deterministic_and_preserves_verified_evidence() 
     assert card.metrics == {"goal": 2, "shot_speed_kmh": 104}
     assert card.match_clock_s == signal.match_clock_s
     assert card.expires_at == now + timedelta(seconds=card.ttl_s)
+
+
+@pytest.mark.parametrize(
+    "kind", ["goal", "penalty", "red_card", "shot_volume", "pass_streak", "corners"]
+)
+@pytest.mark.parametrize("entity", [{"team_id": "t-home"}, {"team_id": "t-away"}])
+def test_fallback_cards_fit_caption_limits_in_broadcast_voice(kind: str, entity: dict) -> None:
+    signal = Signal(
+        signal_id=f"signal-{kind}",
+        match_id="m-0007",
+        kind=kind,
+        match_clock_s=5399,
+        entity=entity,
+        value=12,
+        evidence_event_ids=["evt-1"],
+        score={"t-home": 10, "t-away": 10},
+        tier=1,
+    )
+
+    card = fallback_card(signal, EditorConfig.load(), now=datetime(2026, 10, 25, tzinfo=UTC))
+
+    assert len(card.headline) <= HEADLINE_MAX
+    assert len(card.body) <= BODY_MAX
+    assert card.body.startswith("90' ")
+    assert (
+        "Northbridge Comets" if entity["team_id"] == "t-home" else "Southmere Foxes"
+    ) in card.body
+    assert card.team_id == entity["team_id"]
+
+
+def test_goal_fallback_names_the_scorer_and_the_new_score() -> None:
+    card = fallback_card(
+        make_goal_signal(), EditorConfig.load(), now=datetime(2026, 10, 25, tzinfo=UTC)
+    )
+
+    assert card.headline == "Bram Elsen scores for Northbridge Comets"
+    assert card.body == (
+        "68' Bram Elsen scored for Northbridge Comets with a 104 km/h strike. "
+        "It's Northbridge Comets 2, Southmere Foxes 0."
+    )
+    assert card.player_id == "p-nbr-09"

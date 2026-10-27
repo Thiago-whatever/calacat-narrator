@@ -27,6 +27,7 @@ def card(
         metrics={"shot_volume": 5},
         evidence_event_ids=["evt-1"],
         entity_ids=["t-home"],
+        team_id="t-home",
         topic="shot_volume",
         self_salience=0.8,
         match_clock_s=1000,

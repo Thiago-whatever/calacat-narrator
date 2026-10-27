@@ -15,6 +15,7 @@ from .schemas import (
     MatchEvent,
     MatchId,
     PassPayload,
+    PlayerId,
     SetPiecePayload,
     ShotPayload,
 )
@@ -77,6 +78,7 @@ class ShotEventContext(BaseModel):
     event_type: Literal["shot"] = "shot"
     event_id: str = Field(min_length=1, max_length=64)
     period: Literal[1, 2]
+    player_id: PlayerId | None = None
     outcome: Literal["goal", "saved", "off", "blocked"]
     speed_kmh: float = Field(ge=0, le=250)
     body_part: Literal["foot", "head", "other"]
@@ -118,6 +120,8 @@ class Signal(BaseModel):
     value: int = Field(ge=0)
     evidence_event_ids: list[str] = Field(min_length=1, max_length=100)
     event_context: SignalEventContext | None = None
+    # Goals per team after the triggering event; teams without a goal are omitted.
+    score: dict[EntityId, int] = Field(default_factory=dict)
     tier: Literal[1, 2]
 
     @model_validator(mode="after")
@@ -286,6 +290,7 @@ def _create_signal(
         event_context = ShotEventContext(
             event_id=event.event_id,
             period=event.period,
+            player_id=event.player_id,
             outcome=event.payload.outcome,
             speed_kmh=event.payload.speed_kmh,
             body_part=event.payload.body_part,
@@ -314,5 +319,6 @@ def _create_signal(
         value=value,
         evidence_event_ids=evidence_event_ids,
         event_context=event_context,
+        score=dict(state.score),
         tier=1 if critical else 2,
     )
