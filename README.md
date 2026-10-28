@@ -11,6 +11,7 @@ The numbers never come from the model. Every number in a card comes from the eve
 Entry for the Microsoft × Premier League "Inside the Game" hackathon, category **Best Multi-Agent System**. All teams, players and matches are fictional.
 
 **Try it:** https://thiago-whatever.github.io/calacat-narrator/ (see [Testing instructions](#testing-instructions)).
+**Watch it** https://youtu.be/h4Kw-V2BEEU
 
 ## How it works
 
