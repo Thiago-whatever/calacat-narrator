@@ -19,6 +19,7 @@ from azure.servicebus.aio import (
 )
 
 from .agent_runtime import FoundryCandidateGenerator
+from .mcp_stats import open_mcp_facts
 from .signals import Signal
 
 logger = logging.getLogger(__name__)
@@ -136,8 +137,9 @@ async def consume_signals(
 async def run_worker(settings: WorkerSettings) -> None:
     async with DefaultAzureCredential() as credential:
         agent = create_candidate_agent(settings, credential)
-        async with agent:
-            generator = FoundryCandidateGenerator(agent, settings.agent_name)
+        # The facts tool is served by the MCP match-stats server, a child process (ADR-048).
+        async with agent, open_mcp_facts() as facts:
+            generator = FoundryCandidateGenerator(agent, settings.agent_name, facts)
             async with ServiceBusClient(
                 fully_qualified_namespace=settings.servicebus_namespace,
                 credential=credential,
