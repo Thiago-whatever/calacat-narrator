@@ -333,3 +333,13 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - The player career line counts goals *before* the match, so a second goal by the same player isn't added.
   - The Historian's goal card competes with the specialists' cards for the Editor's airtime.
 - **Revisit when:** Real data is allowed, or matches should form a season. Then keep the archive in Cosmos DB and update it at full time.
+
+## ADR-048 — The specialists' facts tools are served by an MCP server
+- **Decision:** `calacat_narrator.mcp_stats` is an MCP server (FastMCP, stdio) named `calacat-match-stats` with three tools: `get_event_facts(signal)` and `get_history_facts(signal)` (the facts of ADR-038 and ADR-046, from a signal's JSON) and `get_match_stats(match_id)` (score, shots, passing and cards so far, read from the match state in Cosmos DB). Each agent worker starts it as a child process and opens an MCP client session. The specialist's forced tool keeps its name and no arguments. When the model calls it, the worker forwards the current signal to the server's tool of the same name and returns the server's answer, so the model never sees IDs (ADR-038) and the tool call is served over MCP. `local_facts` (in process) stays as the default for tests. `.vscode/mcp.json` registers the server for Copilot agent mode. Implements ADR-009, which named example tools such as `zone_control`; those aren't built.
+- **Why:** ADR-038 kept the facts tool in process so it could move into the MCP server "without changing the agents", and this does that. Stdio inside the same container needs no new Azure resource, endpoint, key or network hop, and the server is the same one an outside developer or Copilot can run against the match.
+- **How it could be wrong:**
+  - The agents don't choose MCP tools themselves: the worker hands the signal to the server, because the model must not see it. An MCP tool the model calls with its own arguments would need the signal in the prompt.
+  - A crashed child process fails every candidate until the container restarts; those signals dead-letter and the Editor publishes templates.
+  - `get_match_stats` isn't given to the agents, because the Reviewer's number check only knows the moment's facts.
+- **Revisit when:** Several services need the server (then host it remotely, for example with the Azure Functions MCP extension and a key), or a specialist should read match stats (then add them to `card_facts` too).
+

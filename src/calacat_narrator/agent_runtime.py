@@ -1,7 +1,7 @@
 """Foundry-backed candidate generation, event facts, and downstream card contracts."""
 
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Annotated, Literal
@@ -350,47 +350,46 @@ class Card(BaseModel):
 # ---- Generation
 
 
-def event_facts_tool(facts: dict[str, str]) -> FunctionTool:
-    """The single function tool specialists use to look up the moment they caption."""
+# The two facts tools (ADR-038, ADR-046): name and description the model sees.
+FACTS_TOOLS = {
+    "get_event_facts": "Return the facts about the football moment to caption, in plain words.",
+    "get_history_facts": (
+        "Return the moment to caption plus club records and player career history."
+    ),
+}
 
-    @tool(
-        name="get_event_facts",
-        description="Return the facts about the football moment to caption, in plain words.",
-    )
-    def get_event_facts() -> dict[str, str]:
-        return facts
-
-    return get_event_facts
+# Builds a facts tool's answer for a signal: in process here, or over MCP (ADR-048).
+FactsSource = Callable[[str, Signal], Awaitable[dict[str, str]]]
 
 
-def history_facts_tool(facts: dict[str, str]) -> FunctionTool:
-    """The Historian's tool: the moment plus the club and player archive (ADR-046)."""
+async def local_facts(tool_name: str, signal: Signal) -> dict[str, str]:
+    facts = signal_facts(signal)
+    return facts | signal_history_facts(signal) if tool_name == "get_history_facts" else facts
 
-    @tool(
-        name="get_history_facts",
-        description="Return the moment to caption plus club records and player career history.",
-    )
-    def get_history_facts() -> dict[str, str]:
-        return facts
 
-    return get_history_facts
+def facts_tool(tool_name: str, signal: Signal, source: FactsSource) -> FunctionTool:
+    """The one tool a specialist uses to look up the moment it captions."""
+
+    @tool(name=tool_name, description=FACTS_TOOLS[tool_name])
+    async def get_facts() -> dict[str, str]:
+        return await source(tool_name, signal)
+
+    return get_facts
 
 
 class FoundryCandidateGenerator:
     """Generate narrative text from queried facts while keeping all provenance in code."""
 
-    def __init__(self, agent: Agent, specialist: str) -> None:
+    def __init__(self, agent: Agent, specialist: str, facts: FactsSource = local_facts) -> None:
         self._agent = agent
         self._specialist = specialist
+        self._facts = facts
 
     async def create_candidate(self, signal: Signal) -> Candidate:
         historian = self._specialist == "historian"
         # One forced tool each, so the minute and score are always in the facts (ADR-046).
-        facts = signal_facts(signal)
-        tool_ = (
-            history_facts_tool(facts | signal_history_facts(signal))
-            if historian
-            else event_facts_tool(facts)
+        tool_ = facts_tool(
+            "get_history_facts" if historian else "get_event_facts", signal, self._facts
         )
         response = await self._agent.run(
             _candidate_prompt(self._specialist, tool_.name),

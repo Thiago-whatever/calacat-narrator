@@ -25,8 +25,8 @@ flowchart LR
   SB -->|"goal, penalty, shot_volume"| GS["Goal & Shot<br/>specialist"]
   SB -->|"pass_streak"| BP["Build-up & Passing<br/>specialist"]
   SB -->|"goal, pass_streak"| HI["Historian<br/>specialist"]
-  GS & BP -.->|"get_event_facts"| FACTS["Facts tool"]
-  HI -.->|"get_history_facts"| ARCH["Facts tool + club archive<br/>(fictional)"]
+  GS & BP -.->|"MCP: get_event_facts"| MCP["MCP match-stats server<br/>(stdio, in each agent container)"]
+  HI -.->|"MCP: get_history_facts<br/>(+ club archive, fictional)"| MCP
   GS & BP & HI -->|"candidates"| CT{{"Service Bus<br/>candidates topic"}}
   SB -.->|"dead letters"| ED
   CT --> ED["Editor<br/>budget → Reviewer → fallback"]
@@ -58,6 +58,7 @@ More detail: [architecture](DOCS/architecture.md), [data model](DOCS/data-model.
 
 - **Microsoft Foundry:** a `gpt-5-mini` model deployment, called with Entra ID (no keys).
 - **Microsoft Agent Framework:** the specialists, the facts tool and the Reviewer.
+- **Model Context Protocol:** the `calacat-match-stats` MCP server (`python -m calacat_narrator.mcp_stats`) serves the specialists' facts tools and `get_match_stats`; `.vscode/mcp.json` registers it for Copilot agent mode (ADR-048).
 - **Azure Functions:** Flex Consumption, Python 3.12. Ingest, interpret and the read API.
 - **Azure Event Hubs:** the match event stream.
 - **Azure Service Bus:** topics with filtered subscriptions and dead-letter queues.
