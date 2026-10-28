@@ -20,12 +20,13 @@ from .agent_runtime import (
     Card,
     Lang,
     ReviewDecision,
+    candidate_metrics,
     card_facts,
     signal_body_part,
     signal_player_id,
     signal_team_id,
 )
-from .signals import ShotEventContext, Signal
+from .signals import Signal
 
 logger = logging.getLogger(__name__)
 
@@ -292,6 +293,8 @@ _TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
         # Historian (ADR-046): the archive's record sentence carries the story.
         "history_goal": ("{team} in the record books", "{minute} {record}."),
         "history_pass_streak": ("{team} in the record books", "{minute} {record}."),
+        # Recap (ADR-047): the result, then the shots.
+        "full_time": ("Full time: {final}", "{minute} {event}. Shots: {shots}."),
         "": ("{team} in the {half}", "{minute} {event}.{score}"),
     },
     "es": {
@@ -308,6 +311,7 @@ _TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
         ),
         "history_goal": ("{team}, para la historia", "{minute} {record}."),
         "history_pass_streak": ("{team}, para la historia", "{minute} {record}."),
+        "full_time": ("Final: {final}", "{minute} {event}. Remates: {shots}."),
         "": ("{team} en el {half}", "{minute} {event}.{score}"),
     },
 }
@@ -349,10 +353,6 @@ def localized_fallback_card(card: Card) -> Card:
 def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None = None) -> Card:
     """Build a deterministic, evidence-preserving card when specialist delivery fails."""
     created_at = _aware_now(now)
-    metrics: dict[str, int | float] = {signal.kind: signal.value}
-    if isinstance(signal.event_context, ShotEventContext):
-        metrics["shot_speed_kmh"] = signal.event_context.speed_kmh
-
     candidate = Candidate(
         candidate_id=str(uuid5(NAMESPACE_URL, f"calacat:fallback:{signal.signal_id}")),
         signal_id=signal.signal_id,
@@ -360,7 +360,7 @@ def fallback_card(signal: Signal, config: EditorConfig, *, now: datetime | None 
         # Placeholder text; localized_fallback_card writes the EN and ES captions below.
         headline=signal.kind.replace("_", " "),
         why_it_matters=signal.kind.replace("_", " "),
-        metrics=metrics,
+        metrics=candidate_metrics(signal),
         evidence_event_ids=signal.evidence_event_ids,
         entity_ids=list(signal.entity.values()),
         team_id=signal_team_id(signal),

@@ -136,6 +136,15 @@ Cosmos ETags protect concurrent writes.
 Every signal also carries `score`, the goals per team after the triggering event (teams
 without a goal are omitted), and shot contexts carry the shooter's `player_id`.
 
+The second half's `period` `end` event raises one `full_time` signal (ADR-047): tier 1,
+entity = the winning team (either team in a draw), `value` = total goals, and `stats` with
+the final numbers per team (`goals`, `shots`, `shots_on_target`, `passes_attempted`,
+`passes_completed`, `longest_pass_streak`, `red_cards`) and `{"goals": n}` per scorer. The
+`recap` subscription gets it. Its candidate and card keep those numbers in `metrics` as
+`<entity>.<stat>` (for example `"t-home.shots": 14`), so `card_facts` rebuilds the same recap
+facts for the Reviewer, the number check and the template. The topic is `full_time`, a
+critical topic.
+
 The Container Apps agent runtime consumes one configured filtered subscription from
 `signals` using Entra ID. The signal is **not** put in the prompt (ADR-038). Instead the
 specialist gets one Agent Framework function tool, `get_event_facts`, which returns plain

@@ -123,6 +123,7 @@
     "setpiece": "Balón parado",
     "keeper": "Portería",
     "history_goal": "Historia",
-    "history_pass_streak": "Historia"
+    "history_pass_streak": "Historia",
+    "full_time": "Final del partido"
   }
 }

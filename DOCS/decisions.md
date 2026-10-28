@@ -333,3 +333,12 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - The player career line counts goals *before* the match, so a second goal by the same player isn't added.
   - The Historian's goal card competes with the specialists' cards for the Editor's airtime.
 - **Revisit when:** Real data is allowed, or matches should form a season. Then keep the archive in Cosmos DB and update it at full time.
+
+## ADR-047 — Full-time recap from the final match state, by a fourth agent
+- **Decision:** The second half's final whistle (`period` `end` in period 2) raises a `full_time` signal that carries the final numbers from the interpreter's match state: per team goals, shots, shots on target, passes attempted and completed, longest passing run and red cards, plus goals per scorer. A **Recap** agent has its own `recap` subscription (`sys.Label = 'full_time'`) and Container App on the same image. Its one forced tool, `get_recap_facts`, returns the moment's facts plus the result, scorers, shots, passing and red cards in plain words. The numbers travel in the candidate's and card's `metrics` as `<entity>.<stat>`, so `card_facts` rebuilds the same facts for the Reviewer and the number check. `full_time` is a critical topic: it skips the queue, and a reject or failure publishes the bilingual template ("Full time: Northbridge Comets 2, Southmere Foxes 1"). Its dead letters go to the Editor, so a recap is published even if the agent never answers. `azd provision` keeps its image through `SERVICE_AGENT_RUNTIME_RECAP_IMAGE_NAME`.
+- **Why:** The brief names recaps, and the issue asked to summarize the match's top cards. Cards expire from Cosmos after 3 minutes, so at full time the earlier cards are gone. The match state, which the cards were written from, is durable and already holds every number a recap needs. Reusing the specialist pattern (one forced facts tool, Reviewer, template fallback) keeps it small and adds a fourth agent with a distinct role.
+- **How it could be wrong:**
+  - The recap can't quote earlier cards' wording, and it has no goal minutes because the match state keeps totals only.
+  - The card expires after 180 s like every card, so a viewer who joins later doesn't see it.
+- **Revisit when:** The recap should cite the moments themselves (then keep a per-match list of published card headlines and goal minutes in the match state), or it should stay on screen (then give `full_time` a longer TTL).
+
