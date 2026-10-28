@@ -88,7 +88,7 @@ No sign-in is needed. The console is a **receive-only demo build**, not a produc
 7. Try **EN / ES**, and the **Accessibility** menu: high contrast, larger text, reduced motion and keyboard shortcuts.
 
 ### 2. A live match narrated by the agents
-**On the hosted console: the Start live match button.** Press **Start live match** on the Pages console. It starts a match on the server at 10× speed (about 9 minutes) and switches the console to it; the first cards arrive within a minute. At most 2 matches run at once, and a press while both are running joins one of them. This is the only live path on the hosted demo: posting events to `/api/ingest` needs a Function key, which isn't published.
+**Watch the agents narrate a live match.** On the hosted console, press **Start live match**. The server starts a new fictional match at 10× speed, which takes about 9 minutes, and the console switches to it. Within a minute, cards start arriving in the feed. Each badge shows which agent wrote the card (Goal & Shot, Build-up & Passing, Historian or Recap), and whether the Reviewer approved it or it fell back to a template. Try it on a goal: you get the goal card, and often a Historian card putting the goal in the club’s history. At full time, the Recap agent sums up the match. Everyone watching sees the same feed, and up to two matches can run at once; if both are busy, the button joins one of them. This button is the only way to start a live match on the hosted demo.
 
 **In your own Azure subscription: run the simulator.** You need Python 3.12 and the Azure Developer CLI. Deploy everything with `azd up` (see [delivery](DOCS/delivery.md)), then read your own Function key and point the simulator at your own Function App:
 ```bash
