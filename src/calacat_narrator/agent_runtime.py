@@ -1,7 +1,7 @@
 """Foundry-backed candidate generation, event facts, and downstream card contracts."""
 
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Annotated, Literal
@@ -19,6 +19,7 @@ from pydantic import (
 
 from .catalog import FootballCatalog, load_catalog
 from .history import HISTORY_PREFIX, history_facts, history_kind
+from .recap import FULL_TIME, recap_facts
 from .schemas import EntityId, MatchId, PlayerId, TeamId
 from .signals import ShotEventContext, Signal
 
@@ -97,6 +98,12 @@ HISTORIAN_INSTRUCTIONS = (
     "the moment in historical context: a club record, a career milestone, or what makes this "
     "player special. Lead with the most remarkable archive fact; keep the minute."
 )
+RECAP_INSTRUCTIONS = (
+    "You are the Recap agent. The match has just ended. Your tool returns the final score and "
+    "the match numbers. Write the full-time caption: the result first, then the one or two "
+    "numbers that best explain it, such as a scorer, the shots or the passing. Say it is full "
+    "time and keep the minute."
+)
 
 
 # ---- Facts (ADR-038): plain words built in code, with no IDs or internal field names.
@@ -154,6 +161,7 @@ def event_facts(
             "pass_streak": f"{team} encadenó {value} pases seguidos",
             "penalty": f"{team} recibió un penalti",
             "red_card": f"{team} se quedó con un jugador menos",
+            FULL_TIME: "sonó el pitido final",
         }.get(kind, f"{team} llegó a {value} en {kind.replace('_', ' ')}")
     else:
         facts["event"] = {
@@ -162,6 +170,7 @@ def event_facts(
             "pass_streak": f"{team} completed {value} passes in a row",
             "penalty": f"{team} were awarded a penalty",
             "red_card": f"{team} had a player sent off",
+            FULL_TIME: "the final whistle went",
         }.get(kind, f"{team} reached {value} {kind.replace('_', ' ')}")
 
     if speed_kmh is not None:
@@ -204,6 +213,11 @@ def signal_history_facts(signal: Signal) -> dict[str, str]:
         player=facts.get("player"),
         score=signal.score,
     )
+
+
+def signal_recap_facts(signal: Signal) -> dict[str, str]:
+    """The final numbers the Recap agent writes from (ADR-047)."""
+    return recap_facts(_catalog(), candidate_metrics(signal))
 
 
 def signal_facts(signal: Signal) -> dict[str, str]:
@@ -350,47 +364,55 @@ class Card(BaseModel):
 # ---- Generation
 
 
-def event_facts_tool(facts: dict[str, str]) -> FunctionTool:
-    """The single function tool specialists use to look up the moment they caption."""
+# The facts tools (ADR-038, ADR-046, ADR-047): name and description the model sees.
+FACTS_TOOLS = {
+    "get_event_facts": "Return the facts about the football moment to caption, in plain words.",
+    "get_history_facts": (
+        "Return the moment to caption plus club records and player career history."
+    ),
+    "get_recap_facts": (
+        "Return the final score and the match numbers for the full-time caption."
+    ),
+}
+# Each specialist's one forced tool; the rest use get_event_facts.
+SPECIALIST_TOOLS = {"historian": "get_history_facts", "recap": "get_recap_facts"}
 
-    @tool(
-        name="get_event_facts",
-        description="Return the facts about the football moment to caption, in plain words.",
-    )
-    def get_event_facts() -> dict[str, str]:
-        return facts
-
-    return get_event_facts
+# Builds a facts tool's answer for a signal: in process here, or over MCP (ADR-048).
+FactsSource = Callable[[str, Signal], Awaitable[dict[str, str]]]
 
 
-def history_facts_tool(facts: dict[str, str]) -> FunctionTool:
-    """The Historian's tool: the moment plus the club and player archive (ADR-046)."""
+async def local_facts(tool_name: str, signal: Signal) -> dict[str, str]:
+    facts = signal_facts(signal)
+    if tool_name == "get_history_facts":
+        return facts | signal_history_facts(signal)
+    if tool_name == "get_recap_facts":
+        return facts | signal_recap_facts(signal)
+    return facts
 
-    @tool(
-        name="get_history_facts",
-        description="Return the moment to caption plus club records and player career history.",
-    )
-    def get_history_facts() -> dict[str, str]:
-        return facts
 
-    return get_history_facts
+def facts_tool(tool_name: str, signal: Signal, source: FactsSource) -> FunctionTool:
+    """The one tool a specialist uses to look up the moment it captions."""
+
+    @tool(name=tool_name, description=FACTS_TOOLS[tool_name])
+    async def get_facts() -> dict[str, str]:
+        return await source(tool_name, signal)
+
+    return get_facts
 
 
 class FoundryCandidateGenerator:
     """Generate narrative text from queried facts while keeping all provenance in code."""
 
-    def __init__(self, agent: Agent, specialist: str) -> None:
+    def __init__(self, agent: Agent, specialist: str, facts: FactsSource = local_facts) -> None:
         self._agent = agent
         self._specialist = specialist
+        self._facts = facts
 
     async def create_candidate(self, signal: Signal) -> Candidate:
         historian = self._specialist == "historian"
         # One forced tool each, so the minute and score are always in the facts (ADR-046).
-        facts = signal_facts(signal)
-        tool_ = (
-            history_facts_tool(facts | signal_history_facts(signal))
-            if historian
-            else event_facts_tool(facts)
+        tool_ = facts_tool(
+            SPECIALIST_TOOLS.get(self._specialist, "get_event_facts"), signal, self._facts
         )
         response = await self._agent.run(
             _candidate_prompt(self._specialist, tool_.name),
@@ -418,7 +440,7 @@ class FoundryCandidateGenerator:
             match_id=signal.match_id,
             headline=draft.headline,
             why_it_matters=draft.why_it_matters,
-            metrics=_candidate_metrics(signal),
+            metrics=candidate_metrics(signal),
             evidence_event_ids=signal.evidence_event_ids,
             entity_ids=list(signal.entity.values()),
             team_id=signal_team_id(signal),
@@ -433,10 +455,13 @@ class FoundryCandidateGenerator:
         )
 
 
-def _candidate_metrics(signal: Signal) -> dict[str, int | float]:
+def candidate_metrics(signal: Signal) -> dict[str, int | float]:
+    """The signal's value, the shot speed, and full time's final numbers as `<entity>.<stat>`."""
     metrics: dict[str, int | float] = {signal.kind: signal.value}
     if isinstance(signal.event_context, ShotEventContext):
         metrics["shot_speed_kmh"] = signal.event_context.speed_kmh
+    for entity_id, stats in signal.stats.items():
+        metrics |= {f"{entity_id}.{name}": value for name, value in stats.items()}
     return metrics
 
 
@@ -445,6 +470,7 @@ def _candidate_prompt(specialist: str, tool_name: str = "get_event_facts") -> st
         "goal-shot": GOAL_SHOT_INSTRUCTIONS,
         "buildup-passing": BUILD_UP_PASSING_INSTRUCTIONS,
         "historian": HISTORIAN_INSTRUCTIONS,
+        "recap": RECAP_INSTRUCTIONS,
     }.get(specialist, "")
     return (
         f"A moment just happened in a live football match. Call {tool_name} first to "
@@ -473,6 +499,8 @@ def card_facts(card: Card, lang: Lang = "en") -> dict[str, str]:
         body_part=card.body_part,
         lang=lang,
     )
+    if kind == FULL_TIME:
+        facts |= recap_facts(_catalog(), card.metrics, lang)
     if kind != card.topic:
         # Historian cards: the Reviewer and the number check see the same archive facts.
         facts |= history_facts(

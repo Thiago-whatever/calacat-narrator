@@ -94,6 +94,11 @@ var specialistSubscriptions = [
     deadLetterOnExpiry: false
   }
   {
+    // Recap (ADR-047): the full-time caption from the final numbers.
+    name: 'recap'
+    filter: 'sys.Label = \'full_time\''
+  }
+  {
     name: 'tactical'
     filter: 'sys.Label IN (\'pressure_shift\', \'attack_side_shift\', \'rhythm_change\')'
   }
