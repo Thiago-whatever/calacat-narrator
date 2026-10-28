@@ -1,6 +1,6 @@
-"""OpenTelemetry tracing (ADR-019, ADR-049): one trace per card, signal → specialist → Editor.
+"""OpenTelemetry tracing (ADR-019, ADR-049): interpret → signal → specialist → Editor in one trace.
 
-Each published signal starts its own trace. Its W3C `traceparent` travels in the Service Bus
+Each published signal gets a span under the `interpret` invocation. Its W3C `traceparent` travels in the Service Bus
 message's application properties to the specialist, then on the candidate to the Editor, so
 the agent's model and tool calls (Agent Framework spans) and the Reviewer sit under one trace.
 Spans carry `calacat.*` attributes (`signal_id`, `match_id`, `event_id`, …) to find them.

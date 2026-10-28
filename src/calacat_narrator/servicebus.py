@@ -31,10 +31,9 @@ def publish_signals(signals: list[Signal]) -> None:
 
     messages = []
     for signal in signals:
-        # Each signal starts its card's trace; the message carries it on (ADR-049).
+        # Under the interpret invocation; the message carries the trace on (ADR-049).
         with card_span(
             f"signal {signal.kind}",
-            new_trace=True,
             signal_id=signal.signal_id,
             match_id=signal.match_id,
             kind=signal.kind,
