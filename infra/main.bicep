@@ -26,6 +26,11 @@ param foundryModelDeploymentName string = 'narrator-chat'
 @description('Images azd last deployed, keyed by service name (SERVICE_<NAME>_IMAGE_NAME).')
 param containerImages object = {}
 
+@description('Event Hubs Capture to an ADLS Gen2 raw lake (ADR-050); azd: `azd env set ENABLE_CAPTURE true`.')
+@allowed(['true', 'false'])
+// A string, because azd substitutes ENABLE_CAPTURE into main.parameters.json as text.
+param enableCapture string = 'false'
+
 @description('GitHub Pages origin of the Reporter console; the Function App allows only this origin.')
 param webConsoleOrigin string = 'https://thiago-whatever.github.io'
 
@@ -65,6 +70,8 @@ module messaging 'modules/messaging.bicep' = {
     location: location
     eventHubNamespaceName: 'eh-${baseName}'
     serviceBusNamespaceName: 'sb-${baseName}'
+    enableCapture: bool(enableCapture)
+    lakeStorageAccountName: take('dl${baseName}', 24)
     tags: tags
   }
 }

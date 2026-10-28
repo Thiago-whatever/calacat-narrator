@@ -365,3 +365,18 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - Agent Framework doesn't record prompts and completions unless sensitive telemetry is turned on, which it isn't.
 - **Revisit when:** Sampling hides cards that matter (then sample by `calacat.kind` and keep every critical card), or `interpret` switches to `cardinality: one` (then continue the ingest trace into the signal).
 
+## ADR-050 — Event Hubs Capture to an ADLS Gen2 raw lake, behind a flag
+- **Decision:** A Bicep flag, `enableCapture` (azd: `azd env set ENABLE_CAPTURE true`, default `false`), turns on Event Hubs Capture for `match-events`. With it on, `azd provision` creates:
+  - an ADLS Gen2 account (`dl<name>`): hierarchical namespace, Cool tier, LRS, no shared keys, no public blob access;
+  - a `raw` container, and a lifecycle rule that deletes captured files after 30 days;
+  - a system-assigned identity on the Event Hubs namespace, with **Storage Blob Data Contributor** on the lake;
+  - Capture itself: Avro every 5 minutes or 300 MB, skipping empty windows, at `raw/{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}.avro`, authenticated with that identity rather than a key.
+
+  Nothing in the app reads the lake yet. It's the cold path: every validated match event, as ingested, for replay, analytics or Fabric later (ADR-011).
+- **Why:** It gives a data-lake story for almost no code: Capture copies from Event Hubs' own storage and doesn't use the consumers' egress, and the ingest path doesn't change. It stays off by default because on the Standard tier Capture is billed for every throughput-unit hour it's on, whether or not a match is running, which matters against the monthly budget (ADR-017). Preflight validation (`az deployment group validate`) passes with the flag on.
+- **How it could be wrong:**
+  - Turning Capture on may need the deploying user to have blob data rights on the lake (Storage Blob Data Owner), which an Owner role alone doesn't include. If `azd provision` fails on Capture with an authorization error, grant that role on the `dl…` account and run it again.
+  - Only events that arrive after Capture is on are captured. The 1-day Event Hubs retention can't backfill older matches.
+  - Turning the flag off again stops Capture, but the lake account stays until it's deleted by hand.
+- **Revisit when:** Something reads the lake (then add a reader role and a schema note to data-model.md), or the cost is worth it permanently (then set the flag's default to `true`).
+

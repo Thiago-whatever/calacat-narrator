@@ -63,7 +63,7 @@ More detail: [architecture](DOCS/architecture.md), [data model](DOCS/data-model.
 - **Microsoft Agent Framework:** the specialists, the facts tool and the Reviewer.
 - **Model Context Protocol:** the `calacat-match-stats` MCP server (`python -m calacat_narrator.mcp_stats`) serves the specialists' facts tools and `get_match_stats`; `.vscode/mcp.json` registers it for Copilot agent mode (ADR-048).
 - **Azure Functions:** Flex Consumption, Python 3.12. Ingest, interpret and the read API.
-- **Azure Event Hubs:** the match event stream.
+- **Azure Event Hubs:** the match event stream. Optional **Capture** to an **ADLS Gen2** raw lake as Avro (`azd env set ENABLE_CAPTURE true`; off by default for cost, ADR-050).
 - **Azure Service Bus:** topics with filtered subscriptions and dead-letter queues.
 - **Azure Cosmos DB:** serverless; match state and cards.
 - **Azure Container Apps:** the specialists and the Editor, with KEDA scaling on Service Bus.
