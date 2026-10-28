@@ -13,7 +13,8 @@
         "agent-runtime-goal-shot": "${SERVICE_AGENT_RUNTIME_GOAL_SHOT_IMAGE_NAME}",
         "agent-runtime-buildup-passing": "${SERVICE_AGENT_RUNTIME_BUILDUP_PASSING_IMAGE_NAME}",
         "editor": "${SERVICE_EDITOR_IMAGE_NAME}",
-        "agent-runtime-historian": "${SERVICE_AGENT_RUNTIME_HISTORIAN_IMAGE_NAME}"
+        "agent-runtime-historian": "${SERVICE_AGENT_RUNTIME_HISTORIAN_IMAGE_NAME}",
+        "agent-runtime-recap": "${SERVICE_AGENT_RUNTIME_RECAP_IMAGE_NAME}"
       }
     }
   }

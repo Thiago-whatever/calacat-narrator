@@ -13,6 +13,8 @@ critical_topics:
   - goal
   - red_card
   - penalty
+  # The recap (ADR-047) goes out at once and is never dropped; a reject publishes its template.
+  - full_time
 topic_weights:
   goal: 1.0
   red_card: 1.0
@@ -23,6 +25,7 @@ topic_weights:
   progression: 0.6
   history_goal: 0.8
   history_pass_streak: 0.6
+  full_time: 1.0
 topic_rarity:
   goal: 1.0
   red_card: 1.0
@@ -33,5 +36,6 @@ topic_rarity:
   progression: 0.75
   history_goal: 0.9
   history_pass_streak: 0.8
+  full_time: 1.0
 focus_match_relevance: 1.0
 focus_other_relevance: 0.65
