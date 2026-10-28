@@ -1,6 +1,7 @@
 """MCP match-stats server (ADR-009, ADR-048): the agents' facts tools over the Model Context Protocol.
 
-The specialists' tools are served here: their in-process `get_event_facts` / `get_history_facts`
+The specialists' tools are served here: their in-process `get_event_facts` / `get_history_facts` /
+`get_recap_facts`
 forward the current signal to this server, which builds the plain-word facts (ADR-038).
 `get_match_stats` reads a match's durable state from Cosmos DB, for anyone with access.
 
@@ -17,7 +18,13 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.fastmcp import FastMCP
 
-from .agent_runtime import _catalog, broadcast_minute, signal_facts, signal_history_facts
+from .agent_runtime import (
+    _catalog,
+    broadcast_minute,
+    signal_facts,
+    signal_history_facts,
+    signal_recap_facts,
+)
 from .cosmos import get_match_container, read_match_state
 from .interpreter import MatchState
 from .schemas import MatchId
@@ -43,6 +50,13 @@ def get_history_facts(signal: str) -> dict[str, str]:
     """The moment plus the fictional club and player archive the Historian consults (ADR-046)."""
     parsed = Signal.model_validate_json(signal)
     return signal_facts(parsed) | signal_history_facts(parsed)
+
+
+@server.tool()
+def get_recap_facts(signal: str) -> dict[str, str]:
+    """The final whistle plus the result, scorers, shots and passing for the Recap (ADR-047)."""
+    parsed = Signal.model_validate_json(signal)
+    return signal_facts(parsed) | signal_recap_facts(parsed)
 
 
 @server.tool()

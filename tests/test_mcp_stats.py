@@ -24,7 +24,7 @@ async def _over_mcp(tool_name: str):
 def test_server_lists_its_tools_and_serves_the_same_facts() -> None:
     tools, facts = asyncio.run(_over_mcp("get_event_facts"))
 
-    assert tools == {"get_event_facts", "get_history_facts", "get_match_stats"}
+    assert tools == {"get_event_facts", "get_history_facts", "get_recap_facts", "get_match_stats"}
     assert facts == signal_facts(make_signal())
 
 
@@ -92,3 +92,14 @@ def test_workers_start_the_server_as_a_child_process(monkeypatch: pytest.MonkeyP
             return await facts("get_event_facts", make_signal())
 
     assert asyncio.run(run()) == signal_facts(make_signal())
+
+
+def test_recap_facts_over_mcp_match_the_local_ones() -> None:
+    from test_recap import full_time_signal
+
+    async def run():
+        async with create_connected_server_and_client_session(server) as session:
+            return await McpFacts(session)("get_recap_facts", full_time_signal())
+
+    signal = full_time_signal()
+    assert asyncio.run(run()) == asyncio.run(local_facts("get_recap_facts", signal))
