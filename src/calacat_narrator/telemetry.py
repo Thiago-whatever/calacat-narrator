@@ -7,6 +7,7 @@ Spans carry `calacat.*` attributes (`signal_id`, `match_id`, `event_id`, …) to
 Without `APPLICATIONINSIGHTS_CONNECTION_STRING` nothing is exported and spans are no-ops.
 """
 
+import logging
 import os
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -25,7 +26,10 @@ def configure_tracing(service_name: str) -> bool:
     from agent_framework.observability import enable_instrumentation
     from azure.monitor.opentelemetry import configure_azure_monitor
 
-    configure_azure_monitor()
+    # Live metrics polls every second, and the SDK logs each HTTP call at INFO: both flood the
+    # container logs. Traces and app logs still export.
+    configure_azure_monitor(enable_live_metrics=False)
+    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
     enable_instrumentation()
     return True
 
