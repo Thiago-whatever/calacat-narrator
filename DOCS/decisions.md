@@ -351,3 +351,17 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - `get_match_stats` isn't given to the agents, because the Reviewer's number check only knows the moment's facts.
 - **Revisit when:** Several services need the server (then host it remotely, for example with the Azure Functions MCP extension and a key), or a specialist should read match stats (then add them to `card_facts` too).
 
+## ADR-049 — Tracing: one trace per card from the signal, linked back to ingest
+- **Decision:** Implements ADR-019 with OpenTelemetry and the Azure Monitor distro (`azure-monitor-opentelemetry`), in `calacat_narrator.telemetry`.
+  - **Function App:** `host.json` sets `"telemetryMode": "OpenTelemetry"` and the app setting `PYTHON_APPLICATIONINSIGHTS_ENABLE_TELEMETRY=true`, so the host and the Python worker export to Application Insights. `ingest` adds an `ingest` span with `calacat.event_id` and `calacat.match_id`.
+  - **Each signal starts its own trace** (`signal <kind>`, with `signal_id`, `match_id`, `kind`, `event_id`, `match_clock_s`), linked to the `interpret` invocation. Its W3C `traceparent` goes in the Service Bus message's application properties.
+  - **Specialist:** the worker continues that trace in a `specialist` span. Agent Framework's own spans (`enable_instrumentation()`: agent run, model call, `get_event_facts` tool call) sit under it. The candidate message carries the trace on.
+  - **Editor:** `editor <route>` spans continue the trace, and so does `editor publish` for a queued card when it goes out, so the Reviewer's model call and the stored `card_id`, `source` and `review` belong to the same trace.
+  - The Container Apps get `APPLICATIONINSIGHTS_CONNECTION_STRING` and call `configure_azure_monitor()` at start. Without it, tracing is off and the spans are no-ops.
+- **Why:** ADR-019's "revisit" case applies: with `cardinality: many`, the Functions Event Hubs trigger hands the worker only the bodies, not each event's properties, so a trace can't follow an event from ingest into `interpret`. One trace per card from the signal onward, plus `calacat.event_id` on the ingest span and on the signal, gives the same answer in two clicks. That answer is "where did this card's time go, and which agent and model call made it".
+- **How it could be wrong:**
+  - The distro samples by rate (5 traces/s by default), so on a busy match some cards have no trace.
+  - Foundry's Tracing page shows these spans only after the Application Insights resource is connected to the Foundry project. That's a portal step, not in Bicep.
+  - Agent Framework doesn't record prompts and completions unless sensitive telemetry is turned on, which it isn't.
+- **Revisit when:** Sampling hides cards that matter (then sample by `calacat.kind` and keep every critical card), or `interpret` switches to `cardinality: one` (then continue the ingest trace into the signal).
+

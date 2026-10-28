@@ -32,6 +32,7 @@ from calacat_narrator.kickoff import (
 from calacat_narrator.schemas import MatchEvent
 from calacat_narrator.servicebus import publish_signals
 from calacat_narrator.signals import evaluate_signals, load_signal_rules
+from calacat_narrator.telemetry import card_span
 from calacat_narrator.webpubsub import (
     client_access_url,
     match_group,
@@ -75,7 +76,9 @@ def ingest(req: func.HttpRequest) -> func.HttpResponse:
         ]
         return _json_response({"error": "invalid_event", "details": details}, 400)
     try:
-        publish_event(event)
+        # Signals record this event_id, so a card's trace can be traced back to its ingest.
+        with card_span("ingest", event_id=event.event_id, match_id=event.match_id):
+            publish_event(event)
     except (AzureError, RuntimeError, ValueError):
         logger.exception("Failed to publish event %s to Event Hubs", event.event_id)
         return _json_response({"error": "event_hub_unavailable"}, 503)

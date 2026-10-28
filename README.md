@@ -68,7 +68,7 @@ More detail: [architecture](DOCS/architecture.md), [data model](DOCS/data-model.
 - **Azure Cosmos DB:** serverless; match state and cards.
 - **Azure Container Apps:** the specialists and the Editor, with KEDA scaling on Service Bus.
 - **Azure Web PubSub:** pushes cards to browsers.
-- **Azure Container Registry** and **Application Insights**.
+- **Azure Container Registry** and **Application Insights** with **OpenTelemetry**: one trace per card from the signal through the specialist's model and tool calls to the Reviewer (ADR-049).
 - **Bicep** and the **Azure Developer CLI** (`azd up`); managed identities throughout.
 - **Python:** Pydantic contracts and pytest.
 - **React 19, TypeScript, Vite and MUI:** the console; Vitest and oxlint.
