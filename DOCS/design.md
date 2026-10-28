@@ -1,8 +1,8 @@
 # Design
 
-The visual system and the Reporter console spec. The interactive prototype lives on a private Claude design canvas ([Calacat Reporter Console](https://claude.ai/artifact/6xnGg1T13X8nrSbZu8ecFk)); this document is the source of truth when the two disagree. Decisions are ADR-031 to ADR-035 in [decisions.md](decisions.md).
+The visual system and the Reporter console spec, as implemented in `web/`. The design decisions are ADR-031 to ADR-035 in [decisions.md](decisions.md).
 
-All teams, players and matches in the prototype are fictional demo data.
+All teams, players and matches are fictional. The demo teams below (Ríos FC and the others) are the console's built-in demo match; live matches use the backend catalog (Northbridge Comets and Southmere Foxes).
 
 ## Look
 

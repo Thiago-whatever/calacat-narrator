@@ -15,7 +15,7 @@
 
 The Python contract is implemented with Pydantic in `src/calacat_narrator/schemas.py`.
 It validates event-specific payloads, timezone-aware timestamps, pitch bounds, and
-1 Hz position snapshots. The anonymous `POST /ingest` Function accepts one JSON event
+1 Hz position snapshots. The `POST /api/ingest` Function (Function key required, see below) accepts one JSON event
 envelope per request, enforces a 64 KiB request-body limit, and publishes only validated
 events to Event Hubs using the Function App managed identity. Invalid input returns
 `400`, oversized input `413`, unsupported content types `415`, and Event Hubs failures
@@ -47,8 +47,7 @@ Every 1 s, a `positions` message carries `{match_clock_s, players:[{id,x,y,speed
 ## Simulator
 - Seeded (`--seed`), replay speed adjustable (`--speed 10`).
 - A possession state machine over zones: each action is chosen by zone and team style (possession, direct, pressing). Players drift toward formation slots plus ball-side shift, and positions are smoothed.
-- An optional **scenario director** schedules story beats (early red card, late comeback).
-- `sim.baseline` runs about 50 matches and writes expected-at-minute distributions per metric, used by the signal gate.
+- Not built yet: a **scenario director** for story beats (C31), and baseline curves for deviation-based signals (C23).
 
 Events are **facts only** (ADR-037): who, where, when, outcome, speed and body part.
 Derived opinions such as xG, pass difficulty or "inside the opponent's shape" are never
@@ -77,7 +76,7 @@ anonymous because judges use it, behind the running and daily caps. The simulato
 `az functionapp keys list -g <rg> -n <function-app> --query functionKeys.default -o tsv`
 and keep it in your local environment only, never in the repo or the Pages build.
 
-### Judge-started matches (C16, ADR-044)
+### Judge-started matches (ADR-044)
 
 `POST /api/matches` starts a match on the server. The body is optional: `{"speed": 10}`
 (an integer from 5 to 20; unknown fields are rejected), and the console sends none. The server
@@ -147,8 +146,12 @@ critical topic.
 
 The Container Apps agent runtime consumes one configured filtered subscription from
 `signals` using Entra ID. The signal is **not** put in the prompt (ADR-038). Instead the
-specialist gets one Agent Framework function tool, `get_event_facts`, which returns plain
-facts built in code from the catalog and the signal, with no IDs or field names:
+specialist gets one forced Agent Framework function tool, `get_event_facts`, which returns plain
+facts built in code from the catalog and the signal, with no IDs or field names. The worker
+answers the tool call through the `calacat-match-stats` MCP server (ADR-048). The Historian's
+tool is `get_history_facts` (the same facts plus the fictional club archive in
+`data/history.json`, ADR-046), and its cards use the topic `history_<kind>`; the Recap
+agent's is `get_recap_facts` (ADR-047).
 
 ```json
 { "minute": "57'", "half": "second half", "team": "Northbridge Comets",
@@ -217,7 +220,7 @@ Every stored card carries `i18n.es`; `score` (goals per team after the event) an
 shots, `body_part` (`foot` / `head` / `other`) travel from the signal.
 
 **Agent trail.** `agent` names the specialist that wrote the draft (its subscription name,
-`goal-shot` or `buildup-passing`; null for a card built from a dead-lettered signal), and
+`goal-shot`, `buildup-passing`, `historian` or `recap`; null for a card built from a dead-lettered signal), and
 `review` is the Reviewer's verdict: `approved` or `revised`. A fallback card has
 `source: "fallback"` and `review: null`, and keeps `agent` when it replaced that
 specialist's draft. The console shows these as badges on each card.

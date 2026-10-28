@@ -53,20 +53,20 @@ More detail: [architecture](DOCS/architecture.md), [data model](DOCS/data-model.
 | --- | --- | --- |
 | **Specialists:** Goal & Shot, Build-up & Passing, Historian | Agent Framework agents, one Container App each, scaled on their Service Bus subscription | They get a signal kind but not the data. They call the **`get_event_facts`** tool, which returns plain words ("57'", "Bram Elsen scored for Northbridge Comets", "2–1"), and return structured JSON: a headline of up to 60 characters and a body of up to 180. The **Historian** calls **`get_history_facts`** instead: the same facts plus a fictional club and player archive, to put a goal or passing run in context ("a club record", "the club's all-time top scorer"); the record comparison is computed in code. A validator rejects IDs, field names, raw seconds and words like "signal" or "data". |
 | **Recap** | A fourth agent, own Container App, woken by the final whistle | At full time the interpreter sends a `full_time` signal carrying the final numbers. The Recap agent calls **`get_recap_facts`** (result, scorers, shots, passing, red cards in plain words) and writes the full-time caption. It goes through the Reviewer like any card and is never dropped; its template is "Full time: Northbridge Comets 2, Southmere Foxes 1". |
-| **Editor** | Code, not a model | It scores each candidate as event weight × rarity × recency × focus, removes duplicates by topic and allows about one card every 20–30 s. Goals, penalties and red cards skip the queue. |
+| **Editor** | Code, not a model | It scores each candidate as event weight × rarity × recency × focus, removes duplicates by topic and allows about one card every 20–30 s. Goals, penalties, red cards and the full-time recap skip the queue. |
 | **Reviewer** | A second agent with its own instructions | It reviews each card the Editor picks: **approve**, **revise** (wrong name, number or minute, voice, length) or **reject** (nothing newsworthy, so the slot stays free). It writes the Spanish version in the same call. Code then checks that every number in both languages appears in the facts and that each body gives the minute. |
 | **Fallback** | Templates in code | If a signal dead-letters, an agent fails, or the Reviewer times out, errors or returns invalid output, the Editor publishes an English and Spanish card built from the same facts. A critical moment is never dropped. |
 
 ## Built with
 
 - **Microsoft Foundry:** a `gpt-5-mini` model deployment, called with Entra ID (no keys).
-- **Microsoft Agent Framework:** the specialists, the facts tool and the Reviewer.
+- **Microsoft Agent Framework:** the four agents, their facts tools and the Reviewer.
 - **Model Context Protocol:** the `calacat-match-stats` MCP server (`python -m calacat_narrator.mcp_stats`) serves the specialists' facts tools and `get_match_stats`; `.vscode/mcp.json` registers it for Copilot agent mode (ADR-048).
-- **Azure Functions:** Flex Consumption, Python 3.12. Ingest, interpret and the read API.
+- **Azure Functions:** Flex Consumption, Python 3.12. Ingest, interpret, the read API and judge-started matches.
 - **Azure Event Hubs:** the match event stream. Optional **Capture** to an **ADLS Gen2** raw lake as Avro (`azd env set ENABLE_CAPTURE true`; off by default for cost, ADR-050).
 - **Azure Service Bus:** topics with filtered subscriptions and dead-letter queues.
 - **Azure Cosmos DB:** serverless; match state and cards.
-- **Azure Container Apps:** the specialists and the Editor, with KEDA scaling on Service Bus.
+- **Azure Container Apps:** the agents and the Editor, with KEDA scaling on Service Bus.
 - **Azure Web PubSub:** pushes cards to browsers.
 - **Azure Container Registry** and **Application Insights** with **OpenTelemetry**: one trace per card from the signal through the specialist's model and tool calls to the Reviewer (ADR-049).
 - **Bicep** and the **Azure Developer CLI** (`azd up`); managed identities throughout.
@@ -88,7 +88,7 @@ No sign-in is needed. The console is a **receive-only demo build**, not a produc
 7. Try **EN / ES**, and the **Accessibility** menu: high contrast, larger text, reduced motion and keyboard shortcuts.
 
 ### 2. A live match narrated by the agents
-**On the hosted console: the Start live match button.** *TODO (C16, PR #68, merged): once deployed, a **Start live match** button appears on the Pages console. It starts a match on the server and switches the console to it. At most 2 matches run at once.* This is the only live path on the hosted demo: posting events to `/api/ingest` needs a Function key, which isn't published.
+**On the hosted console: the Start live match button.** Press **Start live match** on the Pages console. It starts a match on the server at 10× speed (about 9 minutes) and switches the console to it; the first cards arrive within a minute. At most 2 matches run at once, and a press while both are running joins one of them. This is the only live path on the hosted demo: posting events to `/api/ingest` needs a Function key, which isn't published.
 
 **In your own Azure subscription: run the simulator.** You need Python 3.12 and the Azure Developer CLI. Deploy everything with `azd up` (see [delivery](DOCS/delivery.md)), then read your own Function key and point the simulator at your own Function App:
 ```bash
@@ -108,7 +108,22 @@ ruff check . && pytest
 cd web && npm ci && npm test && npm run lint && npm run build
 ```
 
-CI ([ci.yml](.github/workflows/ci.yml), PR #70) runs the same checks on every pull request and push to `main`.
+CI ([ci.yml](.github/workflows/ci.yml)) runs the same checks, plus `az bicep build`, on every pull request and push to `main`. To deploy your own copy, see [delivery](DOCS/delivery.md).
+
+### Repository layout
+
+| Path | What |
+| --- | --- |
+| `src/calacat_narrator/` | The Python package: simulator, schemas, interpreter and signals, agents, Editor, MCP server, telemetry |
+| `src/calacat_narrator/data/` | Fictional teams, players and club archive; the signal rules (`signals.yaml`) and the Editor's budget (`editor.yaml`) |
+| `function_app.py`, `host.json` | The Azure Functions app: `ingest`, `interpret`, `negotiate`, `cards`, `matches`, `run_kickoff` |
+| `Dockerfile` | One image for every Container App; `WORKER_MODULE` picks the agent or the Editor |
+| `tests/` | pytest suite |
+| `web/` | The Reporter console (see [web/README.md](web/README.md)) |
+| `infra/`, `azure.yaml` | Bicep and the azd service map |
+| `DOCS/` | Architecture, contracts, decisions and the rest (see [DOCS/README.md](DOCS/README.md)) |
+
+Record significant decisions as a new ADR at the end of [decisions.md](DOCS/decisions.md), and keep [data-model.md](DOCS/data-model.md) in step with any contract change.
 
 ## License
 

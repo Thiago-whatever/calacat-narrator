@@ -53,6 +53,7 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** Tune by watching 10× replays. All values live in `editor.yaml`.
 
 ## ADR-009 — Custom MCP server for match stats
+*Implemented by ADR-048.*
 - **Decision:** Agents read stats through an MCP server (`get_player_stats`, `zone_control`, `pass_network`, …) over Cosmos.
 - **Why:** It's one tool surface for all agents and for outside developers (empowerment), and it counts toward the MCP rubric item.
 - **How it could be wrong:** An extra hop adds latency and another service to deploy.
@@ -71,12 +72,14 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** The MVP is done by D4. Then add Eventstream → Eventhouse for fan analytics.
 
 ## ADR-012 — Personas: Reporter and Fan (Casual ↔ Analyst)
+*Partly built: the Reporter console exists; fan mode is not built yet (C15).*
 - **Decision:** Two modes. Reporter is a ranked feed plus send-to-air. Fan has a depth switch (casual/analyst), favorite club, favorite player, player-focus, and language.
 - **Why:** The rules explicitly contrast a "data-hungry analyst" and a "casual fan" and also name broadcast scenarios.
 - **How it could be wrong:** Three audiences in one UI may blur the demo story.
 - **Revisit when:** The UX test shows confusion. Then split into separate routes.
 
 ## ADR-013 — Threshold-gated signals vs a per-minute baseline
+*Partly built: absolute thresholds only; the baseline is not built yet (C23).*
 - **Decision:** A stat becomes a signal only when it passes its rule in `signals.yaml`: minimum sample, minimum match time, deviation from the expected-at-minute baseline (≥2σ or top/bottom 5%), absolute milestones, change held over a window with hysteresis, and a per-(metric, entity) cooldown. Goals, red cards and penalties bypass the gate. The baseline comes from ~50 seeded simulated matches.
 - **Why:** Raw stats early in a match are noise ("100% pass completion at 1'"). Significance depends on time and context.
 - **How it could be wrong:** Hand-picked thresholds miss context-driven stories ("first shot on target after 70 minutes"). The baseline is only as realistic as the simulator.
@@ -89,6 +92,7 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** The PR overhead exceeds ~10% of the day. Then batch small changes.
 
 ## ADR-015 — GitHub Actions + azd for CI/CD, OIDC auth
+*Partly built: CI runs on every PR; continuous deployment is not built yet (C30).*
 - **Decision:** CI runs lint, tests, build and an a11y smoke test on PRs. CD comes from `azd pipeline config` on merge to `main`. Federated credentials, no stored secrets.
 - **Why:** Quality-practices criterion, reproducibility, GitHub hero tech, and no secrets in a public repo.
 - **How it could be wrong:** Setting up the pipeline can eat hours.
@@ -107,12 +111,14 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** Before recording the video, raise the quota temporarily.
 
 ## ADR-018 — Security for a public repo
+*Key Vault turned out not to be needed: every service uses managed identity.*
 - **Decision:** Managed Identity, Key Vault, secret scanning + push protection, Foundry content filters on, MIT license.
 - **Why:** The repo must be public, and these items also count toward enterprise readiness.
 - **How it could be wrong:** Managed Identity role assignments in Bicep are fiddly and can slow D1.
 - **Revisit when:** Never skip for secrets. If MI blocks progress, use Key Vault references temporarily.
 
 ## ADR-019 — End-to-end OpenTelemetry tracing
+*Implemented by ADR-049.*
 - **Decision:** One trace per card across ingest → signal → agent → Editor, in App Insights / Foundry tracing.
 - **Why:** It's cheap with Agent Framework, makes debugging possible, and doubles as an explainability demo.
 - **How it could be wrong:** Trace propagation across Service Bus needs manual context passing.
@@ -125,62 +131,44 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** Required service capacity is unavailable in East US or evaluation shows that a higher reasoning effort materially improves grounded cards.
 
 ## ADR-021 — Public endpoints for the MVP
-
-**Decision:** Keep Azure service endpoints public for the MVP; require TLS and managed-identity/RBAC access, and disable shared-key, local, anonymous, or public-blob access where supported.
-
-**Why:** The public demo needs reachable app and Web PubSub endpoints, while a private network would add infrastructure and deployment dependencies outside this slice.
-
-**How it could be wrong:** Public endpoints increase network exposure even when data access requires identity-based authorization.
-
-**Revisit when:** Before production use or when a private network boundary is available; add private endpoints and restrict public access then.
+- **Decision:** Keep Azure service endpoints public for the MVP; require TLS and managed-identity/RBAC access, and disable shared-key, local, anonymous, or public-blob access where supported.
+- **Why:** The public demo needs reachable app and Web PubSub endpoints, while a private network would add infrastructure and deployment dependencies outside this slice.
+- **How it could be wrong:** Public endpoints increase network exposure even when data access requires identity-based authorization.
+- **Revisit when:** Before production use or when a private network boundary is available; add private endpoints and restrict public access then.
 
 ## ADR-022 — Match-keyed event ordering and aggregate persistence
-
-**Decision:** Partition Event Hubs by `match_id`; persist one Cosmos DB aggregate document per match, deduplicating by event sequence and using ETags for concurrent updates.
-
-**Why:** The interpreter needs ordered, replay-safe state updates while keeping its query and storage model small for the MVP.
-
-**How it could be wrong:** A partition key concentrates one match's traffic on one partition, and a single document may become a contention point at higher event rates.
-
-**Revisit when:** Per-match throughput or Cosmos conflict rates become material; then partition aggregates by match plus entity or use an append-only event ledger.
+- **Decision:** Partition Event Hubs by `match_id`; persist one Cosmos DB aggregate document per match, deduplicating by event sequence and using ETags for concurrent updates.
+- **Why:** The interpreter needs ordered, replay-safe state updates while keeping its query and storage model small for the MVP.
+- **How it could be wrong:** A partition key concentrates one match's traffic on one partition, and a single document may become a contention point at higher event rates.
+- **Revisit when:** Per-match throughput or Cosmos conflict rates become material; then partition aggregates by match plus entity or use an append-only event ledger.
 
 ## ADR-023 — Publish gated signals before committing match state
-
-**Decision:** Evaluate signal gates from the proposed state and publish to Service Bus before committing the corresponding Cosmos update; use deterministic signal IDs with the topic's duplicate detection.
-
-**Why:** A failed publish leaves the Event Hubs event uncheckpointed and retryable, avoiding a committed aggregate with a silently lost signal.
-
-**How it could be wrong:** Service Bus may accept a signal before a later Cosmos conflict or failure; duplicate detection limits but does not eliminate duplicates beyond its configured history window.
-
-**Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.
+- **Decision:** Evaluate signal gates from the proposed state and publish to Service Bus before committing the corresponding Cosmos update; use deterministic signal IDs with the topic's duplicate detection.
+- **Why:** A failed publish leaves the Event Hubs event uncheckpointed and retryable, avoiding a committed aggregate with a silently lost signal.
+- **How it could be wrong:** Service Bus may accept a signal before a later Cosmos conflict or failure; duplicate detection limits but does not eliminate duplicates beyond its configured history window.
+- **Revisit when:** The pipeline requires stronger exactly-once behavior; replace this ordering with a transactional outbox and Cosmos change-feed publisher.
 
 ## ADR-024 — Grant model access to the agent workload identity
-
-**Decision:** Assign Cognitive Services OpenAI User on the existing Foundry account to the user-assigned identity intended for Container Apps, not the ingest/interpreter Function identity.
-
-**Why:** The Container Apps agent runtime calls Foundry; granting only that workload identity follows least privilege and avoids giving model access to unrelated Functions.
-
-**How it could be wrong:** If the agent service uses a different managed identity, the deployment will need to attach and authorize that identity instead.
-
-**Revisit when:** The Container App identity or Foundry account changes; verify the deployed agent uses this exact identity before rollout.
+- **Decision:** Assign Cognitive Services OpenAI User on the existing Foundry account to the user-assigned identity intended for Container Apps, not the ingest/interpreter Function identity.
+- **Why:** The Container Apps agent runtime calls Foundry; granting only that workload identity follows least privilege and avoids giving model access to unrelated Functions.
+- **How it could be wrong:** If the agent service uses a different managed identity, the deployment will need to attach and authorize that identity instead.
+- **Revisit when:** The Container App identity or Foundry account changes; verify the deployed agent uses this exact identity before rollout.
 
 ## ADR-025 — Keep agent provenance and message settlement in the application
-
-**Decision:** Run the reusable Agent Framework worker in Container Apps. Set `AZURE_CLIENT_ID` to its attached user-assigned identity so the shared `DefaultAzureCredential` selects that identity for Foundry and Service Bus in Azure, while leaving local developer credential fallback intact. Consume one configured, filtered Service Bus signal subscription; renew each peek lock for up to five minutes; use the Foundry `narrator-chat` deployment at low reasoning effort and structured output for narrative text only. Attach metrics and evidence IDs from the validated signal in application code, publish a deterministic candidate before completing its input, and scale on the subscription with KEDA and managed identity.
-
-**Why:** This keeps narrative claims traceable, lets later specialists reuse the runtime, and ensures failed inference or candidate publication leaves the signal retryable without secrets.
-
-**How it could be wrong:** The generic prompt may be too broad for specialist-quality analysis, and retries can still duplicate work or output after Service Bus duplicate detection expires.
-
-**Revisit when:** Adding a specialist prompt, changing the Foundry deployment, or moving to transactional outbox semantics.
+- **Decision:** Run the reusable Agent Framework worker in Container Apps. Set `AZURE_CLIENT_ID` to its attached user-assigned identity so the shared `DefaultAzureCredential` selects that identity for Foundry and Service Bus in Azure, while leaving local developer credential fallback intact. Consume one configured, filtered Service Bus signal subscription; renew each peek lock for up to five minutes; use the Foundry `narrator-chat` deployment at low reasoning effort and structured output for narrative text only. Attach metrics and evidence IDs from the validated signal in application code, publish a deterministic candidate before completing its input, and scale on the subscription with KEDA and managed identity.
+- **Why:** This keeps narrative claims traceable, lets later specialists reuse the runtime, and ensures failed inference or candidate publication leaves the signal retryable without secrets.
+- **How it could be wrong:** The generic prompt may be too broad for specialist-quality analysis, and retries can still duplicate work or output after Service Bus duplicate detection expires.
+- **Revisit when:** Adding a specialist prompt, changing the Foundry deployment, or moving to transactional outbox semantics.
 
 ## ADR-026 — Ground Goal & Shot narratives in bounded event evidence
+*Amended by ADR-037: events no longer carry xG, so no xG reaches the metrics.*
 - **Decision:** Goal and penalty signals carry a typed copy of their source event's relevant shot or set-piece context. The Goal & Shot specialist receives a role-specific prompt, while application code attaches shot speed and xG to candidate metrics.
 - **Why:** Aggregate goal counts alone cannot support chance-quality or shot-speed narration; keeping event context tied to an evidence ID allows those claims without giving the model authority over metrics or provenance.
 - **How it could be wrong:** Copying context into signals duplicates a small amount of event data, and shot-volume signals still summarize counts rather than every underlying shot.
 - **Revisit when:** The specialist receives match-stat MCP tools or a new signal contract provides richer evidence.
 
 ## ADR-027 — Ground Build-up & Passing narratives in pass evidence
+*Amended by ADR-037: pass difficulty and the inside-opponent-shape flag were removed from events.*
 - **Decision:** Passing signals carry typed context from their triggering pass, and the Build-up & Passing specialist receives role-specific instructions. Application code attaches pass difficulty and the inside-opponent-shape flag to candidate metrics; separate filtered Container Apps workers consume the goal-shot and build-up-passing subscriptions.
 - **Why:** A pass streak alone cannot support claims about difficulty or where a reception occurred. Linking these bounded details to an evidence event keeps the narrative specific to what the signal proves and preserves the existing Goal & Shot worker.
 - **How it could be wrong:** The triggering pass's context does not describe every pass in the streak, so this specialist cannot make aggregate claims about the sequence.
@@ -247,7 +235,7 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** Real fixtures include clashing kits; then add a second kit color or pattern.
 
 ## ADR-036 — Reporter console on Static Web Apps with a linked backend and the `reporter` role (*Superseded by ADR-043*)
-- **Decision:** Host `web/` on Azure Static Web Apps with the Function App as a linked backend, so the console calls `/api/*` on its own origin (`host.json` `routePrefix` is `api`). `staticwebapp.config.json` restricts every route to a `reporter` role (built-in auth, invitations), redirects `401` to sign-in, and sets a CSP of `'self'` plus `wss://*.webpubsub.azure.com` with `frame-ancestors 'none'`. Fonts are bundled, so nothing loads from a third party. When C14 broadcasts go-live, its endpoint checks the `reporter` role in `x-ms-client-principal` itself, not just the SWA route; the public overlay (C14) gets its own anonymous route.
+- **Decision:** Host `web/` on Azure Static Web Apps with the Function App as a linked backend, so the console calls `/api/*` on its own origin (`host.json` `routePrefix` is `api`). `staticwebapp.config.json` restricts every route to a `reporter` role (built-in auth, invitations), redirects `401` to sign-in, and sets a CSP of `'self'` plus `wss://*.webpubsub.azure.com` with `frame-ancestors 'none'`. Fonts are bundled, so nothing loads from a third party. When the overlay broadcasts go-live, its endpoint checks the `reporter` role in `x-ms-client-principal` itself, not just the SWA route; the public overlay gets its own anonymous route.
 - **Why:** Same-origin removes CORS and per-environment API URLs. The console is an operator surface: once go-live reaches the overlay, anyone with the URL could otherwise put text on air. A strict CSP limits what injected content could reach, and self-hosted fonts keep working on locked-down broadcast networks.
 - **How it could be wrong:** Linked backends need the Standard SKU, and judges need an invitation to the role. Emotion's inline styles force `style-src 'unsafe-inline'`.
 - **Revisit when:** Inviting reviewers becomes friction (add a read-only demo route), or Emotion gets a CSP nonce.
@@ -261,12 +249,12 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 ## ADR-038 — Specialists query a facts tool and return structured JSON
 - **Decision:** Specialists no longer receive raw signal JSON in the prompt. Each one gets a single function tool, `get_event_facts`, that returns human-readable facts built in code from the catalog and match state: minute and half, team and opponent names, player name, score after the event, what happened, and speed/body part as phrases. No IDs and no internal field names. The model returns `{headline ≤60, description ≤180, player_id, team_id, salience}`. The application attaches signal, evidence and metrics, so the model can't change provenance. A validator rejects snake_case tokens, IDs and words like `match_clock` or `evidence`; a rejected draft goes through the existing retry/fallback path. The tool starts in-process and can later move into the MCP server (ADR-009) without changing the agents.
 - **Why:** Live cards read like debug output ("PERIOD 2 GOAL (MATCH_CLOCK_S 3741)") because the model only saw field names and wasn't allowed to use names. An agent that queries for context matches the intended event-driven design: wake on a signal, look up the facts, write. The length limits match the console (60/180), so nothing gets truncated.
-- **Latency trade-off (decided, PR #64 review):** The facts are fully known in code before the call, so putting them in the prompt would cost one model call instead of two (call `get_event_facts`, then write), and with the ADR-039 Reviewer a goal goes through three sequential calls. We keep the tool anyway: querying for context is the agent behaviour this design is meant to show, and it lets the facts source move into the MCP server (ADR-009) unchanged. The call is **forced** (`tool_choice` = required, `get_event_facts`), so the model can never caption without the facts; agent_framework resets a required tool choice after the first round, so it can't loop. Goal latency is bounded downstream instead: critical topics get a shorter Reviewer timeout and fall back to the deterministic template (ADR-039).
+- **Latency trade-off (decided in review):** The facts are fully known in code before the call, so putting them in the prompt would cost one model call instead of two (call `get_event_facts`, then write), and with the ADR-039 Reviewer a goal goes through three sequential calls. We keep the tool anyway: querying for context is the agent behaviour this design is meant to show, and it lets the facts source move into the MCP server (ADR-009) unchanged. The call is **forced** (`tool_choice` = required, `get_event_facts`), so the model can never caption without the facts; agent_framework resets a required tool choice after the first round, so it can't loop. Goal latency is bounded downstream instead: critical topics get a shorter Reviewer timeout and fall back to the deterministic template (ADR-039).
 - **How it could be wrong:** Two sequential calls plus the Reviewer can exceed the 5 s goal → card budget under load or 429s; then most critical cards arrive as templates rather than specialist text.
 - **Revisit when:** Measured goal → card p95 goes over ~5 s in the D1 smoke test (then pass the facts in the prompt for critical topics only, keeping the tool for the rest), or the MCP server lands.
 
 ## ADR-039 — Editor = code budget, then a Reviewer agent (approve / revise / reject)
-- **Decision:** The Editor keeps its deterministic salience, rate limit, TTL and dedupe (ADR-008). A candidate that wins a slot then goes to a **Reviewer** agent, which returns `approve | revise | reject` with final text that must obey the same schema and validator. A timeout, error or invalid output publishes the existing templated fallback card; a reject drops a non-critical card and frees the slot, but a **critical** card (goal, red card, penalty) is never dropped: a reject publishes its template instead (PR #65 review). Critical reviews use a shorter timeout (`critical_review_timeout_s`, 3 s vs 10 s) so a goal stays within the ~5 s budget after the two specialist calls (ADR-038). Only reviewed or fallback cards are stored and pushed.
+- **Decision:** The Editor keeps its deterministic salience, rate limit, TTL and dedupe (ADR-008). A candidate that wins a slot then goes to a **Reviewer** agent, which returns `approve | revise | reject` with final text that must obey the same schema and validator. A timeout, error or invalid output publishes the existing templated fallback card; a reject drops a non-critical card and frees the slot, but a **critical** card (goal, red card, penalty) is never dropped: a reject publishes its template instead. Critical reviews use a shorter timeout (`critical_review_timeout_s`, 3 s vs 10 s) so a goal stays within the ~5 s budget after the two specialist calls (ADR-038). Only reviewed or fallback cards are stored and pushed.
 - **Why:** It's a real second agent with a distinct role (critic/editor) and a handoff, and the system recovers when it fails, which is what the Multi-Agent category judges. Running it only after the budget limits calls to about one every 20–30 s, keeping cost and latency low.
 - **How it could be wrong:** It adds a model call before every card, which could delay goal cards. The Reviewer could reject too often and leave the feed empty. Reviews run inline in the single Editor loop and share the `narrator-chat` TPM quota with the specialists, so a slow review or a burst of 429s holds back other routes or turns cards into templates.
 - **Revisit when:** Goal cards take more than ~5 s (then skip review for critical topics and review afterwards), the reject rate goes over ~30%, or reviews visibly stall the loop (then give the Reviewer its own deployment or raised TPM, and run reviews as `asyncio` tasks that settle their message when done).
@@ -284,7 +272,8 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
 - **Revisit when:** Images become dynamic or user-uploaded (then use a Blob Storage container behind the CDN).
 
 ## ADR-042 — Final-day order and cut line
-- **Decision:** The order on Oct 26–27 is: (1) facts-only, realistic simulator with unit checks; (2) facts tool + structured agent JSON + stricter schema; (3) Reviewer + Spanish, then a single full `azd deploy`; (4) UI shows player, team, minute, avatar and an EN/ES switch; (5) "Kick off a match" in Azure (C16); (6) README, video under 2 min, public repo, submit by Oct 27 noon PT. If time runs short, cut step 5 first: the demo match is started from a laptop for the video, and the README tells judges how to run the simulator themselves.
+*Done: every step shipped, including the kickoff endpoint (ADR-044).*
+- **Decision:** The order on Oct 26–27 is: (1) facts-only, realistic simulator with unit checks; (2) facts tool + structured agent JSON + stricter schema; (3) Reviewer + Spanish, then a single full `azd deploy`; (4) UI shows player, team, minute, avatar and an EN/ES switch; (5) "Kick off a match" in Azure; (6) README, video under 2 min, public repo, submit by Oct 27 noon PT. If time runs short, cut step 5 first: the demo match is started from a laptop for the video, and the README tells judges how to run the simulator themselves.
 - **Why:** About one working day remains. Steps 1–3 fix what judges will see in every card, and step 6 can't slip.
 - **How it could be wrong:** Without step 5, judges who don't run the simulator see an empty feed (Rule 4.8).
 - **Revisit when:** Steps 1–4 are done before Oct 27 morning PT; then do step 5.
@@ -295,7 +284,7 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - **Nothing is sent back.** There are no edit, go-live or write endpoints. Selecting, editing, previewing and "going live" with a card (ADR-032, ADR-033) happen only in that browser's memory, aren't visible to anyone else, and reset on refresh.
   - **The overlay is local too.** It's shown inside the console page (or another tab of the same browser). An external program such as OBS can't see a browser-local go-live.
   - **No authentication or authorization**, and no `reporter` role; `staticwebapp.config.json` is dropped. Security headers are reduced to what a `<meta>` CSP can express.
-  - **Later (not in the MVP):** the only write the UI may gain is "start a simulation if none is running" (C16).
+  - **Later (not in the MVP):** the only write the UI may gain is "start a simulation if none is running" (done in ADR-044).
   - The README and the submission's testing instructions say clearly that this is a demo build, not a production broadcast tool.
 
   Supersedes ADR-036.
@@ -307,17 +296,16 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - Free Pages requires the repo to be public.
 - **Revisit when:**
   - The project is used beyond the hackathon or for real broadcast: then add a server-side go-live/overlay channel behind operator sign-in (Entra ID in the SPA, App Service authentication and a role check on every write endpoint).
-  - C16 adds "start a simulation": then that endpoint needs a running-match check and a rate limit, since it's the first anonymous write.
+  - A "start a simulation" endpoint is added: then it needs a running-match check and a rate limit, since it's the first anonymous write.
 
 ## ADR-044 — Judge-started matches run in a queue-triggered Function
-- **Decision:** `POST /api/matches` checks the caps, then puts `{seed, speed}` on the `match-kickoffs` queue in the Function App's own storage account. A queue-triggered function in the same Function App plays the match into Event Hubs. The caps are Cosmos documents with ETag-conditional writes: two running-match slots, released when the match's expected end time (90 min ÷ speed + 1 min) passes, and a counter of 20 matches per UTC day. The server picks the seed; the caller can only choose a speed from 5 to 20 (default 10). The queue doesn't retry a run (`maxDequeueCount: 1`), so a failed publish skips that event instead of ending the match, and the run releases its slot when it ends or crashes. When both slots are busy, or a match kicked off under a minute ago, the request **joins** that match (`202 … "status": "joined"`) instead of getting `429 busy` (PR #68 review): judges always land on a live feed, and repeated clicks don't use up the daily cap.
+- **Decision:** `POST /api/matches` checks the caps, then puts `{seed, speed}` on the `match-kickoffs` queue in the Function App's own storage account. A queue-triggered function in the same Function App plays the match into Event Hubs. The caps are Cosmos documents with ETag-conditional writes: two running-match slots, released when the match's expected end time (90 min ÷ speed + 1 min) passes, and a counter of 20 matches per UTC day. The server picks the seed; the caller can only choose a speed from 5 to 20 (default 10). The queue doesn't retry a run (`maxDequeueCount: 1`), so a failed publish skips that event instead of ending the match, and the run releases its slot when it ends or crashes. When both slots are busy, or a match kicked off under a minute ago, the request **joins** that match (`202 … "status": "joined"`) instead of getting `429 busy`: judges always land on a live feed, and repeated clicks don't use up the daily cap.
 - **Why:** The HTTP response must return immediately while a 10× match runs for 9 minutes. Flex Consumption allows a non-HTTP function to run 30 minutes by default, enough for the slowest allowed speed (18 min). The Function App already has queue access through its identity, so this needs no new resource, image, role or dependency. A Container Apps job would need its own image settings, and starting it would need an ARM role and a management SDK.
 - **How it could be wrong:**
   - If the instance is recycled mid-match, the match stops and its slot stays taken until the expected end (a crash inside the run releases it).
   - A request that loses the race for a slot after the daily count went up still counts against the day.
   - This is the first anonymous write. Joining limits a click loop to about one new match per minute while a slot is free, but a patient script can still use up the day's 20 matches.
 - **Revisit when:** Matches need to survive restarts, or the daily cap is regularly hit by abuse. Then use a Durable Functions orchestration or a Container Apps job, and add a per-client rate limit.
-
 
 ## ADR-045 — Reviewer timeouts: 12 s for critical cards, 15 s for the rest
 - **Decision:** `critical_review_timeout_s` goes from 3 to 12 and `review_timeout_s` from 10 to 15 (`editor.yaml`). Critical topics still get the shorter limit. The fact check also rejects a review whose Spanish headline is the English one, so that card gets the translated template instead.

@@ -12,7 +12,7 @@ npm run build    # static site in dist/
 
 ## Modes
 
-- **Demo** (default): the fictional fixtures from the design prototype, driven by **Start match**.
+- **Demo** (default): the fictional fixtures from the design prototype, driven by **Play demo**.
 - **Live**: build with `VITE_API_BASE_URL=https://<function-app-host>/api` (see `.env.example`) and open
   `/calacat-narrator/?match=m-seed-7`.
   The console calls `GET /api/negotiate`, connects to the receive-only Web PubSub URL, then loads `GET /api/cards`
@@ -23,6 +23,7 @@ npm run build    # static site in dist/
   `API_PROXY_TARGET=https://<function-app-host>`, run `npm run dev`, and open `http://localhost:5173/?match=<match_id>`.
   The dev server forwards `/api/*` to the Function App, so no CORS is needed. Then play a match into Azure with the
   simulator (`--ingest-url https://<function-app-host>/api/ingest`) using the same match ID (`m-seed-<seed>`).
+  Or press **Start live match**, which starts a match on the server and follows it.
 
 ## Hosting: GitHub Pages, receive-only demo (ADR-043)
 
@@ -72,4 +73,4 @@ Built on MUI (Material UI) with Emotion. All styling flows from one theme; no st
 To restyle, change tokens or theme overrides; components read `theme.custom.*` and never hard-code colors.
 High contrast, larger text and reduce motion rebuild the theme from the same tokens.
 
-Go-live state is local to the browser for now; the overlay delivery contract is C14.
+Go-live state is local to the browser (ADR-043). **Open on-air output** shows it in another tab of the same browser (`?overlay=<output>`); nothing is sent to the server.
