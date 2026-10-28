@@ -26,10 +26,11 @@ def configure_tracing(service_name: str) -> bool:
     from agent_framework.observability import enable_instrumentation
     from azure.monitor.opentelemetry import configure_azure_monitor
 
-    # Live metrics polls every second, and the SDK logs each HTTP call at INFO: both flood the
-    # container logs. Traces and app logs still export.
+    # Live metrics polls every second, the SDK logs each HTTP call at INFO, and the exporter logs
+    # each upload at INFO, which it then exports and logs again. Keep Azure SDK logs to WARNING;
+    # traces and the app's own logs still export.
     configure_azure_monitor(enable_live_metrics=False)
-    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+    logging.getLogger("azure").setLevel(logging.WARNING)
     enable_instrumentation()
     return True
 
