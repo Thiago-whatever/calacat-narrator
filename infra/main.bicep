@@ -118,8 +118,8 @@ module compute 'modules/compute.bicep' = {
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
     serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
-    serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'historian']
-    serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'tactical', 'player-milestones']
+    serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'historian', 'recap']
+    serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'recap', 'tactical', 'player-milestones']
     webPubSubHostName: observability.outputs.webPubSubHostName
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     foundryAccountResourceId: foundryAccount.id
@@ -144,8 +144,8 @@ module roles 'modules/roles.bicep' = {
     serviceBusNamespaceName: messaging.outputs.serviceBusNamespaceName
     serviceBusTopicName: messaging.outputs.serviceBusTopicName
     serviceBusCandidateTopicName: messaging.outputs.candidatesTopicName
-    serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'historian']
-    serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'tactical', 'player-milestones']
+    serviceBusSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'historian', 'recap']
+    serviceBusEditorSignalSubscriptionNames: ['goal-shot', 'buildup-passing', 'recap', 'tactical', 'player-milestones']
     webPubSubName: observability.outputs.webPubSubName
   }
 }

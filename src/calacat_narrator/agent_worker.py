@@ -19,7 +19,9 @@ from azure.servicebus.aio import (
 )
 
 from .agent_runtime import FoundryCandidateGenerator
+from .mcp_stats import open_mcp_facts
 from .signals import Signal
+from .telemetry import card_span, configure_tracing, message_context, trace_properties
 
 logger = logging.getLogger(__name__)
 
@@ -93,15 +95,26 @@ async def process_signal_message(
         return
 
     try:
-        candidate = await generator.create_candidate(signal)
-        await sender.send_messages(
-            ServiceBusMessage(
-                candidate.model_dump_json(),
-                content_type="application/json",
-                subject=candidate.topic,
-                message_id=candidate.candidate_id,
+        # Under the signal's trace, so the model and tool spans join the card's trace (ADR-049).
+        with card_span(
+            "specialist",
+            parent=message_context(message.application_properties),
+            signal_id=signal.signal_id,
+            match_id=signal.match_id,
+            kind=signal.kind,
+        ) as span:
+            candidate = await generator.create_candidate(signal)
+            span.set_attribute("calacat.agent", candidate.agent or "")
+            span.set_attribute("calacat.candidate_id", candidate.candidate_id)
+            await sender.send_messages(
+                ServiceBusMessage(
+                    candidate.model_dump_json(),
+                    content_type="application/json",
+                    subject=candidate.topic,
+                    message_id=candidate.candidate_id,
+                    application_properties=trace_properties(),
+                )
             )
-        )
     except Exception:
         logger.exception("Failed to create or publish candidate for signal %s", signal.signal_id)
         await receiver.abandon_message(message)
@@ -136,8 +149,9 @@ async def consume_signals(
 async def run_worker(settings: WorkerSettings) -> None:
     async with DefaultAzureCredential() as credential:
         agent = create_candidate_agent(settings, credential)
-        async with agent:
-            generator = FoundryCandidateGenerator(agent, settings.agent_name)
+        # The facts tool is served by the MCP match-stats server, a child process (ADR-048).
+        async with agent, open_mcp_facts() as facts:
+            generator = FoundryCandidateGenerator(agent, settings.agent_name, facts)
             async with ServiceBusClient(
                 fully_qualified_namespace=settings.servicebus_namespace,
                 credential=credential,
@@ -154,7 +168,9 @@ async def run_worker(settings: WorkerSettings) -> None:
 
 def main() -> None:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
-    asyncio.run(run_worker(WorkerSettings.from_environment()))
+    settings = WorkerSettings.from_environment()
+    configure_tracing(f"agent-{settings.agent_name}")
+    asyncio.run(run_worker(settings))
 
 
 if __name__ == "__main__":

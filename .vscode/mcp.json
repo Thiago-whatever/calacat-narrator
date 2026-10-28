@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "calacat-match-stats": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "calacat_narrator.mcp_stats"]
+    }
+  }
+}

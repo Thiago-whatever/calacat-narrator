@@ -18,6 +18,7 @@ from azure.servicebus.aio import (
     ServiceBusClient,
     ServiceBusReceiver,
 )
+from opentelemetry import trace
 from pydantic import ValidationError
 
 from .agent_runtime import Candidate, Card, FoundryReviewer
@@ -31,6 +32,7 @@ from .editor import (
     review_card,
 )
 from .signals import Signal
+from .telemetry import card_span, configure_tracing, message_context
 from .webpubsub import publish_cards
 
 logger = logging.getLogger(__name__)
@@ -247,16 +249,23 @@ async def process_message(
     an unhandled error here would crash-loop on the same message and stop every card.
     """
     try:
-        if route == "signal_dlq":
-            await process_deadletter_message(receiver, message, editor, config, pending, now=now)
-        elif route == "candidate_dlq":
-            await process_candidate_deadletter_message(
-                receiver, message, editor, config, pending, now=now
-            )
-        else:
-            await process_candidate_message(
-                receiver, message, editor, pending, now=now, reviewer=reviewer
-            )
+        with card_span(
+            f"editor {route}",
+            parent=message_context(message.application_properties),
+            message_id=message.message_id,
+        ):
+            if route == "signal_dlq":
+                await process_deadletter_message(
+                    receiver, message, editor, config, pending, now=now
+                )
+            elif route == "candidate_dlq":
+                await process_candidate_deadletter_message(
+                    receiver, message, editor, config, pending, now=now
+                )
+            else:
+                await process_candidate_message(
+                    receiver, message, editor, pending, now=now, reviewer=reviewer
+                )
     except Exception:
         logger.exception("Editor failed on %s message %s; settling it", route, message.message_id)
         try:
@@ -316,7 +325,13 @@ async def consume_editor(
                 editor.remove(card.candidate_id)
                 continue
             try:
-                stored = await _review_and_store(card, editor, reviewer)
+                # Back under the candidate's trace: the Reviewer's spans join the card's trace.
+                with card_span(
+                    "editor publish",
+                    parent=message_context(source[1].application_properties),
+                    candidate_id=card.candidate_id,
+                ):
+                    stored = await _review_and_store(card, editor, reviewer)
             except Exception:
                 logger.exception("Failed to persist Editor card %s", card.card_id)
                 editor.remove(card.candidate_id)
@@ -428,6 +443,10 @@ def _store_card(card: Card) -> None:
     """Persist, then push to browsers. A failed push only logs: the card is already stored."""
     if card.i18n is None:
         raise ValueError(f"card {card.card_id} has no Spanish text and must not be published")
+    span = trace.get_current_span()
+    span.set_attribute("calacat.card_id", card.card_id)
+    span.set_attribute("calacat.source", card.source)
+    span.set_attribute("calacat.review", card.review or "none")
     persist_card(get_cards_container(), card)
     try:
         publish_cards([card])
@@ -446,6 +465,7 @@ def _message_body(message: ServiceBusReceivedMessage) -> bytes:
 
 def main() -> None:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+    configure_tracing("editor")
     asyncio.run(run_editor(EditorWorkerSettings.from_environment()))
 
 

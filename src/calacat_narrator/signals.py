@@ -9,12 +9,14 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .interpreter import EntityAggregate, MatchState, SignalGateState
+from .recap import FULL_TIME, TEAM_STATS
 from .schemas import (
     CardPayload,
     EntityId,
     MatchEvent,
     MatchId,
     PassPayload,
+    PeriodPayload,
     PlayerId,
     SetPiecePayload,
     ShotPayload,
@@ -122,6 +124,8 @@ class Signal(BaseModel):
     event_context: SignalEventContext | None = None
     # Goals per team after the triggering event; teams without a goal are omitted.
     score: dict[EntityId, int] = Field(default_factory=dict)
+    # full_time only (ADR-047): final numbers per team and per scorer, e.g. {"t-home": {"shots": 14}}.
+    stats: dict[EntityId, dict[str, int]] = Field(default_factory=dict)
     tier: Literal[1, 2]
 
     @model_validator(mode="after")
@@ -159,6 +163,12 @@ def evaluate_signals(
 ) -> list[Signal]:
     """Create critical signals immediately and threshold signals with durable gates."""
     signals: list[Signal] = []
+    if (
+        isinstance(event.payload, PeriodPayload)
+        and event.payload.action == "end"
+        and event.period == 2
+    ):
+        signals.append(_full_time_signal(state, event))
     for rule in rules:
         if rule.critical:
             if _critical_event_matches(rule, event):
@@ -321,4 +331,33 @@ def _create_signal(
         event_context=event_context,
         score=dict(state.score),
         tier=1 if critical else 2,
+    )
+
+
+def _full_time_signal(state: MatchState, event: MatchEvent) -> Signal:
+    """The final whistle (ADR-047): the winner (or either team in a draw) and the final numbers."""
+    teams = sorted(state.team_stats)
+    team_id = max(teams, key=lambda team: state.score.get(team, 0), default=event.team_id)
+    if team_id is None:
+        raise ValueError("full time needs at least one team in the match state")
+    stats = {
+        team: {name: int(getattr(aggregate, name)) for name in TEAM_STATS}
+        for team, aggregate in state.team_stats.items()
+    }
+    stats |= {
+        player: {"goals": aggregate.goals}
+        for player, aggregate in state.player_stats.items()
+        if aggregate.goals
+    }
+    return Signal(
+        signal_id=str(uuid5(NAMESPACE_URL, f"{state.match_id}:{FULL_TIME}:{event.event_id}")),
+        match_id=state.match_id,
+        kind=FULL_TIME,
+        match_clock_s=state.match_clock_s,
+        entity={"team_id": team_id},
+        value=sum(state.score.values()),
+        evidence_event_ids=[event.event_id],
+        score=dict(state.score),
+        stats=stats,
+        tier=1,
     )

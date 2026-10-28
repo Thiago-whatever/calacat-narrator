@@ -121,6 +121,10 @@ resource agentRuntime 'Microsoft.App/containerApps@2025-01-01' = [
                 name: 'AGENT_NAME'
                 value: subscriptionName
               }
+              {
+                name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+                value: applicationInsightsConnectionString
+              }
             ]
           }
         ]
@@ -237,6 +241,10 @@ resource editorRuntime 'Microsoft.App/containerApps@2025-01-01' = {
               name: 'WEBPUBSUB_HUB'
               value: 'cards'
             }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: applicationInsightsConnectionString
+            }
           ]
         }
       ]
@@ -330,6 +338,11 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: applicationInsightsConnectionString
+        }
+        {
+          // The Python worker exports its OpenTelemetry spans itself (ADR-049).
+          name: 'PYTHON_APPLICATIONINSIGHTS_ENABLE_TELEMETRY'
+          value: 'true'
         }
         {
           name: 'COSMOS_ENDPOINT'

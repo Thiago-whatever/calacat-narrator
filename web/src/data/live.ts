@@ -5,7 +5,7 @@ import type { FeedCard, Lang, Match, Output, Phase, Player, Source, Team } from 
 
 // Same pattern as the backend's EntityId (schemas.py); also guards what we put in the URL.
 export const MATCH_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/
-const CRITICAL_TOPICS = new Set(['goal', 'red_card', 'penalty'])
+const CRITICAL_TOPICS = new Set(['goal', 'red_card', 'penalty', 'full_time'])
 const MAX_CARDS = 200
 const MAX_RETRY_MS = 30_000
 // Catch-up also refreshes the authoritative score; pruning keeps stale insights off the feed.
@@ -90,6 +90,7 @@ const AGENT_NAMES: Record<string, Record<Lang, string>> = {
   'goal-shot': { en: 'Goal & Shot', es: 'Gol y remate' },
   'buildup-passing': { en: 'Build-up & Passing', es: 'Construcción y pase' },
   historian: { en: 'Historian', es: 'Historiador' },
+  recap: { en: 'Recap', es: 'Resumen' },
 }
 
 function agentName(agent: string): Record<Lang, string> {

@@ -334,6 +334,37 @@ Format: **Decision** / **Why** / **How it could be wrong** / **Revisit when**. A
   - The Historian's goal card competes with the specialists' cards for the Editor's airtime.
 - **Revisit when:** Real data is allowed, or matches should form a season. Then keep the archive in Cosmos DB and update it at full time.
 
+## ADR-047 — Full-time recap from the final match state, by a fourth agent
+- **Decision:** The second half's final whistle (`period` `end` in period 2) raises a `full_time` signal that carries the final numbers from the interpreter's match state: per team goals, shots, shots on target, passes attempted and completed, longest passing run and red cards, plus goals per scorer. A **Recap** agent has its own `recap` subscription (`sys.Label = 'full_time'`) and Container App on the same image. Its one forced tool, `get_recap_facts`, returns the moment's facts plus the result, scorers, shots, passing and red cards in plain words. The numbers travel in the candidate's and card's `metrics` as `<entity>.<stat>`, so `card_facts` rebuilds the same facts for the Reviewer and the number check. `full_time` is a critical topic: it skips the queue, and a reject or failure publishes the bilingual template ("Full time: Northbridge Comets 2, Southmere Foxes 1"). Its dead letters go to the Editor, so a recap is published even if the agent never answers. `azd provision` keeps its image through `SERVICE_AGENT_RUNTIME_RECAP_IMAGE_NAME`.
+- **Why:** The brief names recaps, and the issue asked to summarize the match's top cards. Cards expire from Cosmos after 3 minutes, so at full time the earlier cards are gone. The match state, which the cards were written from, is durable and already holds every number a recap needs. Reusing the specialist pattern (one forced facts tool, Reviewer, template fallback) keeps it small and adds a fourth agent with a distinct role.
+- **How it could be wrong:**
+  - The recap can't quote earlier cards' wording, and it has no goal minutes because the match state keeps totals only.
+  - The card expires after 180 s like every card, so a viewer who joins later doesn't see it.
+- **Revisit when:** The recap should cite the moments themselves (then keep a per-match list of published card headlines and goal minutes in the match state), or it should stay on screen (then give `full_time` a longer TTL).
+
+## ADR-048 — The specialists' facts tools are served by an MCP server
+- **Decision:** `calacat_narrator.mcp_stats` is an MCP server (FastMCP, stdio) named `calacat-match-stats` with four tools: `get_event_facts(signal)`, `get_history_facts(signal)` and `get_recap_facts(signal)` (the facts of ADR-038, ADR-046 and ADR-047, from a signal's JSON) and `get_match_stats(match_id)` (score, shots, passing and cards so far, read from the match state in Cosmos DB). Each agent worker starts it as a child process and opens an MCP client session. The specialist's forced tool keeps its name and no arguments. When the model calls it, the worker forwards the current signal to the server's tool of the same name and returns the server's answer, so the model never sees IDs (ADR-038) and the tool call is served over MCP. `local_facts` (in process) stays as the default for tests. `.vscode/mcp.json` registers the server for Copilot agent mode. Implements ADR-009, which named example tools such as `zone_control`; those aren't built.
+- **Why:** ADR-038 kept the facts tool in process so it could move into the MCP server "without changing the agents", and this does that. Stdio inside the same container needs no new Azure resource, endpoint, key or network hop, and the server is the same one an outside developer or Copilot can run against the match.
+- **How it could be wrong:**
+  - The agents don't choose MCP tools themselves: the worker hands the signal to the server, because the model must not see it. An MCP tool the model calls with its own arguments would need the signal in the prompt.
+  - A crashed child process fails every candidate until the container restarts; those signals dead-letter and the Editor publishes templates.
+  - `get_match_stats` isn't given to the agents, because the Reviewer's number check only knows the moment's facts.
+- **Revisit when:** Several services need the server (then host it remotely, for example with the Azure Functions MCP extension and a key), or a specialist should read match stats (then add them to `card_facts` too).
+
+## ADR-049 — Tracing: one trace per card from the signal, linked back to ingest
+- **Decision:** Implements ADR-019 with OpenTelemetry and the Azure Monitor distro (`azure-monitor-opentelemetry`), in `calacat_narrator.telemetry`.
+  - **Function App:** `host.json` sets `"telemetryMode": "OpenTelemetry"` and the app setting `PYTHON_APPLICATIONINSIGHTS_ENABLE_TELEMETRY=true`, so the host and the Python worker export to Application Insights. `ingest` adds an `ingest` span with `calacat.event_id` and `calacat.match_id`.
+  - **Each signal starts its own trace** (`signal <kind>`, with `signal_id`, `match_id`, `kind`, `event_id`, `match_clock_s`), linked to the `interpret` invocation. Its W3C `traceparent` goes in the Service Bus message's application properties.
+  - **Specialist:** the worker continues that trace in a `specialist` span. Agent Framework's own spans (`enable_instrumentation()`: agent run, model call, `get_event_facts` tool call) sit under it. The candidate message carries the trace on.
+  - **Editor:** `editor <route>` spans continue the trace, and so does `editor publish` for a queued card when it goes out, so the Reviewer's model call and the stored `card_id`, `source` and `review` belong to the same trace.
+  - The Container Apps get `APPLICATIONINSIGHTS_CONNECTION_STRING` and call `configure_azure_monitor()` at start. Without it, tracing is off and the spans are no-ops.
+- **Why:** ADR-019's "revisit" case applies: with `cardinality: many`, the Functions Event Hubs trigger hands the worker only the bodies, not each event's properties, so a trace can't follow an event from ingest into `interpret`. One trace per card from the signal onward, plus `calacat.event_id` on the ingest span and on the signal, gives the same answer in two clicks. That answer is "where did this card's time go, and which agent and model call made it".
+- **How it could be wrong:**
+  - The distro samples by rate (5 traces/s by default), so on a busy match some cards have no trace.
+  - Foundry's Tracing page shows these spans only after the Application Insights resource is connected to the Foundry project. That's a portal step, not in Bicep.
+  - Agent Framework doesn't record prompts and completions unless sensitive telemetry is turned on, which it isn't.
+- **Revisit when:** Sampling hides cards that matter (then sample by `calacat.kind` and keep every critical card), or `interpret` switches to `cardinality: one` (then continue the ingest trace into the signal).
+
 ## ADR-050 — Event Hubs Capture to an ADLS Gen2 raw lake, behind a flag
 - **Decision:** A Bicep flag, `enableCapture` (azd: `azd env set ENABLE_CAPTURE true`, default `false`), turns on Event Hubs Capture for `match-events`. With it on, `azd provision` creates:
   - an ADLS Gen2 account (`dl<name>`): hierarchical namespace, Cool tier, LRS, no shared keys, no public blob access;
