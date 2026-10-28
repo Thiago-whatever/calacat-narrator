@@ -59,12 +59,14 @@ def test_historian_consults_the_archive_and_gets_its_own_topic() -> None:
         FoundryCandidateGenerator(fake_agent, "historian").create_candidate(signal)  # type: ignore[arg-type]
     )
 
-    assert fake_agent.tool_names == ["get_event_facts", "get_history_facts"]
+    assert fake_agent.tool_names == ["get_history_facts"]
     assert fake_agent.options["tool_choice"] == {
         "mode": "required",
         "required_function_name": "get_history_facts",
     }
-    assert "Historian" in fake_agent.prompt
+    assert "Historian" in fake_agent.prompt and "Call get_history_facts first" in fake_agent.prompt
+    # The one forced tool carries the moment too, so the minute is always there.
+    assert fake_agent.facts["minute"] == "57'" and "record" in fake_agent.facts
     assert candidate.topic == "history_goal" and candidate.agent == "historian"
     assert history_kind(candidate.topic) == "goal"
     # The Reviewer's facts for the card include the same archive facts the agent consulted.
