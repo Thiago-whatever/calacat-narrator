@@ -51,6 +51,7 @@ def signal_json() -> bytes:
 
 class FakeMessage:
     message_id = "message-1"
+    application_properties: dict[bytes, bytes] | None = None
 
     def __init__(self, body: bytes) -> None:
         self.body = body

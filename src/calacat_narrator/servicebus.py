@@ -7,6 +7,7 @@ from azure.identity import DefaultAzureCredential
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
 from .signals import Signal
+from .telemetry import card_span, trace_properties
 
 
 @lru_cache(maxsize=1)
@@ -28,14 +29,26 @@ def publish_signals(signals: list[Signal]) -> None:
     if not topic_name:
         raise RuntimeError("Service Bus topic setting is required")
 
-    messages = [
-        ServiceBusMessage(
-            signal.model_dump_json(),
-            content_type="application/json",
-            subject=signal.kind,
-            message_id=signal.signal_id,
-        )
-        for signal in signals
-    ]
+    messages = []
+    for signal in signals:
+        # Each signal starts its card's trace; the message carries it on (ADR-049).
+        with card_span(
+            f"signal {signal.kind}",
+            new_trace=True,
+            signal_id=signal.signal_id,
+            match_id=signal.match_id,
+            kind=signal.kind,
+            event_id=signal.evidence_event_ids[-1],
+            match_clock_s=signal.match_clock_s,
+        ):
+            messages.append(
+                ServiceBusMessage(
+                    signal.model_dump_json(),
+                    content_type="application/json",
+                    subject=signal.kind,
+                    message_id=signal.signal_id,
+                    application_properties=trace_properties(),
+                )
+            )
     with _client().get_topic_sender(topic_name=topic_name) as sender:
         sender.send_messages(messages)
