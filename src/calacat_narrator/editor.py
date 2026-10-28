@@ -289,6 +289,9 @@ _TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
             "{team} keep the ball",
             "{minute} {event}, keeping {opponent} chasing.{score}",
         ),
+        # Historian (ADR-046): the archive's record sentence carries the story.
+        "history_goal": ("{team} in the record books", "{minute} {record}."),
+        "history_pass_streak": ("{team} in the record books", "{minute} {record}."),
         "": ("{team} in the {half}", "{minute} {event}.{score}"),
     },
     "es": {
@@ -303,6 +306,8 @@ _TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
             "{team} tiene la pelota",
             "{minute} {event} y hace correr a {opponent}.{score}",
         ),
+        "history_goal": ("{team}, para la historia", "{minute} {record}."),
+        "history_pass_streak": ("{team}, para la historia", "{minute} {record}."),
         "": ("{team} en el {half}", "{minute} {event}.{score}"),
     },
 }

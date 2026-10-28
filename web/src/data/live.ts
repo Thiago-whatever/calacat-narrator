@@ -89,6 +89,7 @@ export function parseLiveCard(data: unknown): LiveCard | null {
 const AGENT_NAMES: Record<string, Record<Lang, string>> = {
   'goal-shot': { en: 'Goal & Shot', es: 'Gol y remate' },
   'buildup-passing': { en: 'Build-up & Passing', es: 'Construcción y pase' },
+  historian: { en: 'Historian', es: 'Historiador' },
 }
 
 function agentName(agent: string): Record<Lang, string> {
