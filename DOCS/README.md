@@ -1,37 +1,35 @@
-# Calacat Narrator — Docs
+# Calacat Narrator docs
 
-**Pitch:** Calacat Narrator turns a live stream of synthetic football events into explainable "did you know?" insight cards. A team of specialist AI agents produces candidate insights. An Editor agent ranks them by how much they matter *right now*. Broadcasters pick one to send to air, and fans get the same intelligence personalized by language, depth (casual ↔ analyst), favorite club or player, and accessibility needs.
+Start with the [project README](../README.md) for what the project does, how to try it and how to run the checks. These docs are for contributors.
 
-Built on Azure (Event Hubs, Functions, Service Bus, Cosmos DB, Container Apps, Web PubSub, AI Speech) with Microsoft Foundry + Microsoft Agent Framework and a custom MCP stats server. The web console is an open demo on GitHub Pages (ADR-043).
-
-## Index
 | Doc | What's in it |
 |---|---|
-| [architecture.md](architecture.md) | Pipeline diagram, AWS→Azure mapping, agents, failure handling |
-| [decisions.md](decisions.md) | ADR log: every important decision, why, how it could be wrong |
-| [data-model.md](data-model.md) | Event schemas, coordinates, zones, simulator, signal thresholds |
-| [accessibility.md](accessibility.md) | Language, visual, cognitive accessibility, empowerment |
-| [design.md](design.md) | Visual system and Reporter console spec |
-| [roadmap.md](roadmap.md) | MVP vs stretch vs cut, day plan, submission checklist |
-| [submission.md](submission.md) | Pre-submit checklist, demo video script, submission form text |
-| [delivery.md](delivery.md) | Copilot workflow, CI/CD, hosting, judge access, cost, security |
-| [progress.md](progress.md) | What is done, what is missing, setup commands |
-| [backlog.md](backlog.md) | All issues by priority (P0/P1/P2) and type (Azure/Code/IaC) |
+| [architecture.md](architecture.md) | The pipeline, the agents, failure handling and the Editor's budget |
+| [data-model.md](data-model.md) | Event, signal, candidate and card contracts; the simulator; the HTTP API |
+| [decisions.md](decisions.md) | The decision log (ADRs): what we decided, why, and when to revisit it |
+| [delivery.md](delivery.md) | Infrastructure, deployment, hosting, CI, security, cost and observability |
+| [design.md](design.md) | The visual system and the Reporter console spec |
+| [accessibility.md](accessibility.md) | Accessibility: what's built and what isn't yet |
+| [submission.md](submission.md) | Hackathon submission kit: pre-submit checklist, video script, form text |
+| [evidence/](evidence/README.md) | Screenshots of GitHub Copilot agent mode using the Azure MCP Server |
+
+## Status
+
+**Built and deployed:** the seeded simulator; ingest, interpret and the read API on Azure Functions; threshold-gated signals on Service Bus; four agents (Goal & Shot, Build-up & Passing, Historian, Recap) whose facts tools are served by an MCP server; the Editor's budget, the Reviewer agent with Spanish, and template fallbacks; Web PubSub push; the Reporter console with an on-air output view; judge-started matches; OpenTelemetry tracing; optional Event Hubs Capture; CI.
+
+**Not built yet:** these are open [GitHub issues](https://github.com/Thiago-whatever/calacat-narrator/issues), each with its ID in the title:
+
+- **Agents:** Player and milestones (C19), Tactical (C28), ask-the-match (C29), half-time recap (C27).
+- **Console:** fan mode (C15), control room (C20), heatmaps and zone control (C21), audio narration (C22), Portuguese and French (C34).
+- **Data and quality:** baseline curves for the signal gate (C23), scenario director (C31), groundedness evaluations (C32), Fabric (C33).
+- **Delivery:** continuous deployment (C30).
 
 ## Hackathon pipeline → our implementation
-| Required stage (Rules 4.1(i)) | Where it lives |
-|---|---|
-| Ingest | Simulator → `/ingest` Function → Event Hubs (+ Capture → ADLS) |
-| Interpret | Interpreter Function: match state, aggregates, threshold-gated signals |
-| Explain | Specialist agents (via MCP stats tools) → Editor agent; each card cites evidence |
-| Render | Web PubSub → Reporter feed, OBS-ready `/overlay`, Fan UI |
-| Personalize | Personalizer: language, depth, club, player-focus, audio mode |
 
-## Rubric → features (each criterion is 20%)
-| Criterion | What we show |
+| Required stage | Where it lives |
 |---|---|
-| Technological Implementation | Seeded simulator + baseline, `azd up` IaC, typed schemas, tests, these docs |
-| Agentic Design & Innovation | 4 specialists + Editor, MCP tool use, salience ranking, failure fallback |
-| Real-World Impact | Human-in-the-loop broadcast workflow, timed machine-readable overlay JSON |
-| UX & Presentation | Reporter feed, overlay, fan mode, accessibility, <2 min demo |
-| Category (Best Multi-Agent System) | Distinct roles, shared state (Cosmos), handoffs (Service Bus), recovery (DLQ + templated fallback) |
+| Ingest | Simulator or `POST /api/matches` → `ingest` Function → Event Hubs (optional Capture to ADLS Gen2) |
+| Interpret | `interpret` Function: match state in Cosmos DB, threshold-gated signals on Service Bus |
+| Explain | Specialist agents call facts tools over MCP; the Editor ranks; the Reviewer approves, revises or rejects |
+| Render | Web PubSub → Reporter console on GitHub Pages, with an on-air output view |
+| Personalize | English or Spanish, high contrast, larger text, reduced motion |

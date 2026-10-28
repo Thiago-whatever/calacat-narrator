@@ -1,6 +1,6 @@
 # Submission kit
 
-Everything needed to submit by **Oct 27 2026, noon PT** (ADR-042). The order is: the checklist below, the video, and then the form.
+Everything needed to submit by **Oct 27 2026, 11:59 pm PT**. The order is: the checklist below, the video, and then the form. Keep the deployment running until judging ends on **Nov 10**, and don't change the submission after the deadline.
 
 ## Pre-submit checklist
 
@@ -14,22 +14,20 @@ Do these in order. Each one depends on the step before it.
    git grep -nIE 'AccountKey=|SharedAccessKey=|sig=[A-Za-z0-9%]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY|api[_-]?key\s*[:=]\s*\S{16,}' $(git rev-list --remotes)
    ```
    Both should print nothing. If either finds something, stop. Rotate the secret first, then remove it from history, before going public. A hit that is only reachable through a `pr/*` ref can't be removed by rewriting branches: deleting PR refs needs GitHub Support, so rotating the secret is the fix.
-   One hit is known and expected: `match.jsonl` through `origin/pr/60` (commit `9aa92f1`, committed by mistake and removed before #60 was squash-merged). It is fictional simulator output plus a local `.claude/launch.json` dev-server config, and the content scan finds no secrets in it.
+   One hit is known and expected: `match.jsonl` and `.claude/launch.json` in one old pull-request ref. They are fictional simulator output and a local dev-server config, and the content scan finds no secrets in them.
 2. **Make the repo public.** Settings → General → Danger Zone → Change visibility.
 3. **Turn on secret scanning and push protection.** Settings → Advanced Security.
 4. **Set up Pages.**
    - Settings → Pages → Source: **GitHub Actions**.
    - Settings → Secrets and variables → Actions → **Variables**: `VITE_API_BASE_URL` = `https://fn-calacatdevzehkqyrl.azurewebsites.net/api`. It's a variable, not a secret.
-5. **Merge #61** (C40, the Pages workflow). The workflow builds and publishes the console. Then merge C16 (#68), C14 (#69) and C25 (#70) if they're approved, and the README/submission docs PR.
-6. **Deploy once, after all the merges and before the logged-out check:** run `azd provision` then `azd deploy` (or `azd up`). Several merged changes only take effect in Azure after a deploy:
-   - `azd provision`: the CORS rule for the Pages origin (`webConsoleOrigin`, #61). Without it the Pages console can't call `/api/negotiate` or `/api/cards`.
-   - `azd deploy`: the Function key on `/api/ingest` (#61) and `POST /api/matches` (C16, #68) are Function code.
+5. **Deploy once, from a clean checkout of `main`:** `azd up`. It provisions the CORS rule for the Pages origin (`webConsoleOrigin`), without which the Pages console can't call `/api/negotiate` or `/api/cards`, and deploys every service.
+6. **Publish the console:** Actions → **Deploy web to GitHub Pages** → **Run workflow** (it also runs on every push to `main` that touches `web/`).
 7. **Logged-out check**, in a private window with no GitHub session:
    - The repo page and README load. The Mermaid diagram renders.
    - https://thiago-whatever.github.io/calacat-narrator/ loads. Play demo → go live → pull works, and **Open on-air output** shows the card with the ON AIR tally.
    - A live match shows cards. Use **Start live match** (the judges' path). The README's simulator option needs your Function key, so it only works for you or in a reader's own subscription.
    - The video link plays without signing in.
-8. **Submit** the form with the text below. Then remove the TODO in the README if C16 is live.
+8. **Submit** the form with the text below.
 
 ## Demo video script (≈ 1:50)
 
@@ -39,7 +37,7 @@ Record at 1080p. Use the console in a light theme, at 10× match speed and with 
 | --- | --- | --- |
 | 0:00–0:12 | Console in English, empty feed. Press **Start live match** (or run the simulator) | "This is Calacat Narrator. A team of AI agents watches a live football match and writes the insight cards a broadcaster can put on air, and checks them first." |
 | 0:12–0:30 | Mermaid diagram from the README, zooming along the flow | "Events go through Azure Functions into Event Hubs. The interpreter keeps the match state in Cosmos DB and fires a signal only when something is worth saying. Service Bus routes each signal to a specialist agent." |
-| 0:30–0:50 | First cards arrive in the feed; hover one | "Each specialist runs on Microsoft Agent Framework with a Foundry model. It doesn't get the numbers in its prompt: it calls a facts tool and writes a caption in a broadcast voice. A validator rejects anything that looks like raw data." |
+| 0:30–0:50 | First cards arrive in the feed; point at the agent badge on one | "Four agents on Microsoft Agent Framework and a Foundry model each take one kind of moment: goals and shots, passing, the club's history, and the full-time recap. None gets numbers in its prompt: each calls a facts tool, served over MCP, and writes a caption in a broadcast voice." |
 | 0:50–1:08 | A goal card arrives. Point at the minute and score | "The Editor, in code, decides what's worth the airtime. Then a Reviewer agent approves, fixes or rejects each card and writes the Spanish in the same call. Every number has to match the facts." |
 | 1:08–1:25 | Click the card, drag and resize it, then Go live → countdown → on air. Open the overlay tab | "The reporter stays in control. They pick a card, place it, go live on any of three outputs, and pull it when they're done." |
 | 1:25–1:38 | Switch to **ES**; turn on high contrast and larger text | "The same cards in Spanish, plus high contrast, larger text and reduced motion, all keyboard-operable." |
@@ -56,15 +54,15 @@ Record at 1080p. Use the console in a light theme, at 10× match speed and with 
 **Description:**
 > Calacat Narrator turns a live stream of football events into short broadcast captions a reporter can put on air. A seeded simulator plays a fictional match into Azure Functions and Event Hubs. An interpreter keeps the match state in Cosmos DB and fires threshold-gated signals on Service Bus.
 >
-> Specialist agents built on Microsoft Agent Framework with a Microsoft Foundry model each take one kind of moment. They call a facts tool instead of reading numbers from the prompt, and they return structured, length-checked captions.
+> Four agents built on Microsoft Agent Framework with a Microsoft Foundry model each take one kind of moment: Goal & Shot, Build-up & Passing, a Historian that puts a goal in the context of a fictional club archive, and a full-time Recap. Each calls a facts tool, served by an MCP server, instead of reading numbers from the prompt, and returns a structured, length-checked caption.
 >
 > An Editor in code ranks candidates by importance, rarity and recency, and keeps to an on-air budget. A Reviewer agent then approves, revises or rejects each card and writes the Spanish version, and code checks every number against the facts. When an agent fails or times out, a templated card built from the same facts goes out instead, so goals are never missed.
 >
 > Cards reach a React console on GitHub Pages through Web PubSub in seconds. The reporter previews, edits, places and goes live on one of three outputs. English and Spanish, high contrast, larger text, reduced motion and full keyboard control are built in.
 >
-> All infrastructure is Bicep deployed with azd and uses managed identities. CI runs on every pull request. All teams, players and matches are fictional.
+> All infrastructure is Bicep deployed with azd and uses managed identities. OpenTelemetry traces each card from the event to the Editor, and CI runs on every pull request. All teams, players and matches are fictional.
 
-**Microsoft / Azure technology used:** Microsoft Foundry (gpt-5-mini), Microsoft Agent Framework, Azure Functions (Flex Consumption), Azure Event Hubs, Azure Service Bus, Azure Cosmos DB, Azure Container Apps, Azure Web PubSub, Azure Container Registry, Application Insights, Bicep, Azure Developer CLI, GitHub Actions, GitHub Pages.
+**Microsoft / Azure technology used:** Microsoft Foundry (gpt-5-mini), Microsoft Agent Framework, Azure Functions (Flex Consumption), Azure Event Hubs, Azure Service Bus, Azure Cosmos DB, Azure Container Apps, Azure Web PubSub, Azure Container Registry, Application Insights with OpenTelemetry, Model Context Protocol (MCP), Bicep, Azure Developer CLI, GitHub Actions, GitHub Pages.
 
 **Repository:** https://github.com/Thiago-whatever/calacat-narrator
 

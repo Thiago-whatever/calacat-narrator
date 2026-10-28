@@ -1,33 +1,30 @@
-# Accessibility and empowerment
+# Accessibility
 
-The goal is that every fan can follow and *understand* the match, whatever language they speak, however they see, and however much football they know. Target: **WCAG 2.2 AA**.
+The goal is that anyone can follow and understand the match, whatever language they speak, however they see, and however much football they know. The target is **WCAG 2.2 AA**. The console's detailed rules (focus rings, live regions, keyboard order, motion) are in [design.md](design.md#accessibility).
 
-## Language
-- EN + ES at launch, with PT/FR as stretch. The agent writes natively in the target language instead of translating after the fact, and output is cached per `(card, lang, depth)`.
-- The UI strings are in a single JSON per language.
+## Built
 
-## Visual impairment
-- The card feed is an ARIA live region: `polite` for normal cards, `assertive` for goals, red cards and penalties.
-- **Audio narration mode:** Azure AI Speech neural voices read cards in the user's language.
-- **Every chart has a text alternative**, generated from the same data ("Heatmap: Rivas spent 41% of the first half in the left half-space").
-- High-contrast theme, a colorblind-safe palette, and no meaning carried by color alone.
-- The reporter flow works keyboard-only: J/K to move, Enter to start the 5-second go-live countdown, Esc to cancel it or pull from air (see [design.md](design.md)).
+- **Language:** English and Spanish for both the interface and the cards. The UI strings live in one JSON file per language (`web/src/locales/`). Cards are written in English and translated by the Reviewer in the same call, with the same number check (ADR-040). Template cards have both languages too.
+- **Screen readers:** new cards are announced in a `polite` live region and goals in an `assertive` one. The go-live countdown, cancel and pull are announced too. Silhouettes and shields have text labels.
+- **Keyboard:** the whole reporter flow works without a mouse: J/K to move through the feed, Enter to start the 5-second go-live countdown, Esc to cancel it or pull from air.
+- **Vision:** a high-contrast theme, larger text, and no meaning carried by color alone (every state has a text badge, and every team color has its name next to it).
+- **Motion:** a reduce-motion setting, which also follows the OS's `prefers-reduced-motion`.
+- These settings are remembered in the browser.
 
-## Cognitive and low vision
-- Respects `prefers-reduced-motion`, and cards don't auto-scroll while focused.
-- Font scaling up to 200% without loss of content.
-- **"New to football" depth:** terms such as "half-space" or "inverted fullback" are defined inline.
+## Not built yet
 
-## Empowerment
-- An **"Explain this stat"** button on each metric shows how it's computed, in plain language.
-- The **public MCP server** lets anyone plug in their own agent.
-- An open-source repo with these docs and a data dictionary (data-model.md).
-- A text-only low-bandwidth mode.
+| Idea | Issue |
+|---|---|
+| Fan mode: casual or analyst depth, favorite club or player | C15 |
+| Audio narration of cards | C22 |
+| Heatmaps and zone views, each with a text alternative | C21 |
+| Portuguese and French | C34 |
 
 ## Test checklist
-- [ ] axe DevTools: no serious or critical issues on Reporter, Overlay, Fan
-- [ ] NVDA announces new cards, goal cards interrupt
-- [ ] Full reporter flow works keyboard-only
-- [ ] 200% zoom, no horizontal scroll
-- [ ] Reduced motion honored
-- [ ] ES output reviewed by a native speaker
+
+- [ ] axe DevTools: no serious or critical issues on the console and the on-air output
+- [ ] NVDA announces new cards, and goal cards interrupt
+- [ ] The full reporter flow works keyboard-only
+- [ ] 200% zoom with no horizontal scroll
+- [ ] Reduce motion is honored
+- [ ] Spanish output reviewed by a native speaker

@@ -1,66 +1,73 @@
-# Delivery: dev workflow, CI/CD, hosting, security
+# Delivery: infrastructure, deployment, CI, security
 
-The rubric's "Technological Implementation" lists hero technologies by name: Microsoft Foundry, Agent Framework, **Azure MCP**, **GitHub Copilot Agent Mode**, Fabric, **GitHub SDK**, **GitHub CLI**, Azure Apps and AI Services, and Azure databases. Judges can only credit what they can **see**, so every tool we use leaves evidence in the repo, and the README has a "Built with" section that links to it. We never claim a tool we didn't use.
+## Infrastructure as code
 
-## Development with GitHub Copilot (ADR-014)
-| Use | Visible evidence |
-|---|---|
-| Copilot **Agent Mode** in VS Code to build features | Commits / PR descriptions noting it |
-| Copilot **coding agent**: assign small, well-scoped issues (e.g. "add `corner` event to the simulator") | PRs authored by Copilot in repo history |
-| Copilot **code review** on PRs | Review comments on PRs |
-| `.github/copilot-instructions.md` | Repo conventions (schemas, ADR rule, a11y rules) shared with every agent |
-| **Azure MCP Server** inside Copilot to inspect resources and logs | README note + a screenshot/clip |
-| **GitHub CLI** (`gh`) for issues, PRs and releases | Issues and milestones in the repo |
+- `azure.yaml` lists the services: `api` (the Function App) and one Container App each for `editor` and the agents (`agent-runtime-goal-shot`, `-buildup-passing`, `-historian`, `-recap`). All the Container Apps use the root `Dockerfile` and pick their worker with `WORKER_MODULE`.
+- `infra/main.bicep` is the entry point. Its modules are `messaging`, `data`, `compute`, `observability`, `registry` and `roles`, plus `foundry-role`. `infra/main.parameters.json` maps the azd environment, location and each service's image, so a later `azd provision` keeps the deployed images.
+- Resources are in **East US**. The template references the existing Foundry account and project in `rg-calacat` (deployment `narrator-chat`, `gpt-5-mini`); it doesn't create one (ADR-020, ADR-030).
+- Optional: `azd env set ENABLE_CAPTURE true` turns on Event Hubs Capture to an ADLS Gen2 lake (ADR-050).
 
-Work through **issues → PRs**, not straight to `main`. The history becomes evidence of process.
+## Deploying
 
-## CI/CD with GitHub Actions (ADR-015)
-- **CI on every PR:** `ruff` + `pytest` (stats engine and signal-gate self-checks), schema validation, `markdownlint-cli2`, frontend build, and an `axe` smoke test.
-- **CD:** `azd pipeline config` generates a GitHub Actions workflow that runs `azd provision` + `azd deploy` on merge to `main`.
-- **Auth:** OIDC federated credentials, so no Azure secrets are stored in GitHub.
-- Use GitHub Actions rather than Azure Pipelines: the repo is already on GitHub, and GitHub is a hero tech.
+```bash
+azd auth login
+azd up            # provision + build + deploy everything, about 5 minutes
+```
 
-## Infrastructure as code (ADR-020)
-- `azure.yaml` selects the Bicep entry point in `infra/main.bicep`; `infra/main.parameters.json` maps the azd environment and location.
-- Provision MVP resources in East US. The template references the existing Foundry account/project in `rg-calacat`; it does not create another Foundry resource.
-- Cosmos DB includes the serverless `calacat/match-state` database/container used by the interpreter.
-- Cosmos DB also includes `calacat/cards`, partitioned by `match_id`, with per-item TTL. The Editor Container App writes append-only card documents using the shared workload identity; the cards contract and push seam are documented in `DOCS/data-model.md`.
-- Runtime access uses managed identities and scoped data-plane roles. Local/shared-key authentication is disabled where supported; public endpoints remain enabled for the MVP and `.azure/` environment state is ignored by Git (ADR-021).
-- The Container Apps user-assigned identity receives Cognitive Services OpenAI User on the existing Foundry account for model calls (ADR-024).
-- The Goal & Shot and Build-up & Passing specialists run as separate Docker-built Container Apps, each consuming its filtered Service Bus signal subscription and publishing candidates. They scale to zero and share the workload managed identity for Foundry, messaging, and ACR pull (ADR-025). The apps set `AZURE_CLIENT_ID` to that attached identity's client ID so `DefaultAzureCredential` selects it in Azure; local development can leave it unset and use developer credentials. Install the Foundry provider with the project dependencies using `python -m pip install --pre -e .`.
-- Register the Event Hub, Service Bus, App, Web, SignalR Service, and Operational Insights providers before provisioning (A1).
+- Run `azd` from a **clean checkout of `main`**. `azd deploy` packages whatever is in the working folder, uncommitted changes included.
+- Use `azd up`, not `azd deploy`, after any change to `infra/` or `azure.yaml`, such as a new subscription or Container App.
+- There is no continuous deployment yet (C30): deploys are manual.
 
-## Hosting (what runs where)
+## Hosting
+
 | Component | Service | Scale |
 |---|---|---|
-| Web UI (Reporter console) | GitHub Pages, published by GitHub Actions; receive-only demo, no sign-in (ADR-043) | — |
-| Simulator, agents, Editor, MCP server | Container Apps | Editor stays at one replica to monitor signal DLQs; other workloads scale to zero when idle |
-| Ingest, Interpreter | Functions (Linux Consumption, Y1) | event-driven |
-| Stream | Event Hubs Standard, 1 TU | Capture needs Standard |
-| Fan-out | Service Bus Standard | topics need Standard |
-| State | Cosmos DB serverless | pay per request |
-| Push | Web PubSub | Free tier = 20 connections / 20k msgs/day: **send cards only, never 1 Hz positions** |
-| Models | Foundry deployment | TPM quota set low |
-| Logs/traces | Application Insights | OpenTelemetry from Agent Framework |
+| Reporter console | GitHub Pages, published by `.github/workflows/pages.yml`; a receive-only demo with no sign-in (ADR-043) | — |
+| `ingest`, `interpret`, read API, kickoff | Azure Functions, Flex Consumption (FC1), Python 3.12 | Event-driven |
+| Agents | Container Apps, KEDA-scaled on their Service Bus subscription | 0–2 replicas |
+| Editor and Reviewer | Container App | Exactly 1 replica (it holds the in-memory queue and watches the dead letters) |
+| Stream | Event Hubs Standard | Capture needs Standard |
+| Fan-out | Service Bus Standard | Topics need Standard |
+| State and cards | Cosmos DB, serverless | Pay per request |
+| Push | Web PubSub, Free tier | 20 connections and 20k messages a day, so it carries cards only |
+| Model | Foundry `narrator-chat` (`gpt-5-mini`), 50K tokens per minute | — |
+| Logs and traces | Application Insights | OpenTelemetry (ADR-049) |
 
-## Judges' access: "replay on demand" (ADR-016)
-Judging runs Oct 27 – Nov 10 and judges can show up at any time, so the deployed app has to work without us being there (Rule 4.8: free, unrestricted access).
-- The landing page has a **"Kick off a match"** button that starts a seeded match at 10× (about 9 min).
-- At most **2 concurrent matches**. A third viewer joins a match already running.
-- No login. If we add one, the credentials go in the testing instructions.
+## Judges' access (ADR-016, ADR-044)
 
-## Cost guardrails (ADR-017)
-- An **Azure budget + alert** on the resource group.
-- A low TPM quota on the Foundry deployment, the concurrency cap above, and scale-to-zero.
-- Rough estimate: tens of USD for the whole period, mostly Event Hubs and Service Bus Standard plus tokens. *Verify in the Azure Pricing Calculator; this is a guess.*
+Judges can visit at any time without us there, so the deployed app has to work on its own.
 
-## Security and the public repo (ADR-018)
-- The repo **must be public**, so: no keys in code or `.env` committed, **Managed Identity** between services, and Key Vault for anything that can't use identity.
-- Turn on GitHub **secret scanning + push protection**.
-- Foundry default **content filters** stay on. Agent prompts treat event data as data, not instructions.
-- Add a LICENSE (MIT).
+- The console's **Start live match** button calls `POST /api/matches`, which starts a match with a server-chosen seed at 10× speed (about 9 minutes).
+- At most 2 matches run at once, and 20 start per UTC day. A request that arrives while both are busy, or within a minute of a kickoff, joins the running match instead.
+- There's no login.
 
-## Observability (ADR-019)
-- OpenTelemetry traces span ingest → signal → agent → card, viewable in App Insights and Foundry tracing.
-- The trace for one card is a demo-worthy "explainability" artifact.
-- Stretch: **Foundry evaluations** check card *groundedness* (every number in the text matches the evidence metrics).
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`:
+
+- **Python and Bicep:** `ruff check`, `pytest`, `az bicep build`.
+- **Web console:** `npm test`, `npm run lint`, `npm run build`.
+
+## Security (ADR-018, ADR-021)
+
+- Services talk to each other with **managed identities** and scoped data-plane roles. Shared keys and local auth are off where the service supports it. No secrets are in the repo or in GitHub.
+- `POST /api/ingest` needs a Function key. The simulator reads it from `INGEST_FUNCTION_KEY`. The read endpoints and `POST /api/matches` are anonymous, and the latter is behind the caps above.
+- Endpoints are public (TLS only). Private networking is future work.
+- Foundry's default content filters are on. Agent prompts treat match facts as data, never as instructions.
+- `.azure/` (the azd environment) and `.env*` files are ignored by Git.
+
+## Cost (ADR-017)
+
+- A monthly budget alert on the subscription, a low model quota, scale-to-zero agents and the match caps above.
+- When idle, the deployment costs a few USD a day, mostly Event Hubs and Service Bus Standard. Capture adds a per-hour charge, which is why it's off by default.
+
+## Observability (ADR-049)
+
+- One trace per `interpret` batch, from Event Hubs processing through the signals, the agents (including their model and tool calls) and the Editor. Look for it in Application Insights under the card's `calacat.signal_id` or `calacat.match_id`.
+- For a quick look without traces, `az containerapp logs show -n <app> -g rg-calacat-dev` shows the Editor's `Review failed` and `Dead-lettering` warnings.
+
+## Development with GitHub Copilot (ADR-014)
+
+- `.github/copilot-instructions.md` holds the repo's conventions for every agent.
+- `.vscode/mcp.json` registers the `calacat-match-stats` MCP server for Copilot agent mode.
+- [evidence/](evidence/README.md) shows Copilot agent mode using the Azure MCP Server against the deployed resource group.
