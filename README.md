@@ -12,7 +12,9 @@ Entry for the Microsoft × Premier League "Inside the Game" hackathon, category 
 
 **Try it:** https://thiago-whatever.github.io/calacat-narrator/ (see [Testing instructions](#testing-instructions)).
 
-**Watch it** https://youtu.be/h4Kw-V2BEEU
+**Watch it:** https://youtu.be/h4Kw-V2BEEU, including a live match narrated by the agents.
+
+> **The hackathon is over, so the hosted Azure backend has been shut down.** The hosted console now runs the demo only and makes no calls to Azure. To see the agents narrate a live match, deploy your own copy (see [A live match narrated by the agents](#2-a-live-match-narrated-by-the-agents)).
 
 ## How it works
 
@@ -86,11 +88,11 @@ No sign-in is needed. The console is a **receive-only demo build**, not a produc
 3. Click a card (or press J/K, then Enter) to place it on the program monitor. You can drag it, resize it or edit its text.
 4. Press **Go live on TV 1**. A 5-second countdown runs, which you can cancel; then the card is on air. **Pull from air** (or Esc) removes it.
 5. Switch between TV 1, TV 2 and Stream; each output holds its own on-air card.
-6. Press **Open on-air output** for a tab that shows what viewers of one output see: only the card on air, with an ON AIR / OFF AIR tally. The **ⓘ** button in the header explains the demo, the live match and these steps.
+6. Press **Open on-air output** for a tab that shows what viewers of one output see: only the card on air, with an ON AIR / OFF AIR tally. The **ⓘ** button in the header explains the demo and these steps.
 7. Try **EN / ES**, and the **Accessibility** menu: high contrast, larger text, reduced motion and keyboard shortcuts.
 
 ### 2. A live match narrated by the agents
-**Watch the agents narrate a live match.** On the hosted console, press **Start live match**. The server starts a new fictional match at 10× speed, which takes about 9 minutes, and the console switches to it. Within a minute, cards start arriving in the feed. Each badge shows which agent wrote the card (Goal & Shot, Build-up & Passing, Historian or Recap), and whether the Reviewer approved it or it fell back to a template. Try it on a goal: you get the goal card, and often a Historian card putting the goal in the club’s history. At full time, the Recap agent sums up the match. Everyone watching sees the same feed, and up to two matches can run at once; if both are busy, the button joins one of them. This button is the only way to start a live match on the hosted demo.
+The hosted console is demo-only now, so a live match needs your own deployment. With it, a console built with `VITE_API_BASE_URL` pointing at your Function App shows a **Start live match** button: the server plays a fictional match at 10× speed (about 9 minutes), and within a minute cards start arriving. Each badge shows which agent wrote the card (Goal & Shot, Build-up & Passing, Historian or Recap), and whether the Reviewer approved it or it fell back to a template. On a goal you get the goal card, and often a Historian card putting it in the club's history. At full time, the Recap agent sums up the match. See [web/README.md](web/README.md) for running the console against your deployment.
 
 **In your own Azure subscription: run the simulator.** You need Python 3.12 and the Azure Developer CLI. Deploy everything with `azd up` (see [delivery](DOCS/delivery.md)), then read your own Function key and point the simulator at your own Function App:
 ```bash

@@ -24,7 +24,10 @@ export default defineConfig(({ command, mode }) => {
     "style-src 'self' 'unsafe-inline'", // Emotion (MUI) injects <style> tags at runtime
     "font-src 'self'",
     "img-src 'self' data:",
-    ['connect-src', "'self'", apiOrigin(env.VITE_API_BASE_URL), 'wss://*.webpubsub.azure.com'].filter(Boolean).join(' '),
+    // A demo-only build (no API) allows no connection beyond its own origin.
+    ['connect-src', "'self'", apiOrigin(env.VITE_API_BASE_URL), env.VITE_API_BASE_URL && 'wss://*.webpubsub.azure.com']
+      .filter(Boolean)
+      .join(' '),
     "base-uri 'self'",
     "form-action 'none'",
     "object-src 'none'",
