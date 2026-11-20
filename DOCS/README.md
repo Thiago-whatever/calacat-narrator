@@ -15,6 +15,8 @@ Start with the [project README](../README.md) for what the project does, how to 
 
 ## Status
 
+The hosted Azure deployment was shut down after judging ended (November 2026) to stop its costs. The GitHub Pages console runs the demo only. Everything below still deploys with `azd up` in your own subscription.
+
 **Built and deployed:** the seeded simulator; ingest, interpret and the read API on Azure Functions; threshold-gated signals on Service Bus; four agents (Goal & Shot, Build-up & Passing, Historian, Recap) whose facts tools are served by an MCP server; the Editor's budget, the Reviewer agent with Spanish, and template fallbacks; Web PubSub push; the Reporter console with an on-air output view; judge-started matches; OpenTelemetry tracing; optional Event Hubs Capture; CI.
 
 **Not built yet:** these are open [GitHub issues](https://github.com/Thiago-whatever/calacat-narrator/issues), each with its ID in the title:

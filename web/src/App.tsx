@@ -111,7 +111,8 @@ export default function App() {
   }
   return (
     <AppThemeProvider prefs={prefs.prefs}>
-      {liveMatch ? <LiveConsole key={liveMatch} matchId={liveMatch} starter={starter} {...prefs} /> : <DemoConsole starter={starter} {...prefs} />}
+      {/* Live mode needs an API; a demo-only build ignores ?match= instead of calling nothing. */}
+      {liveMatch && API_BASE ? <LiveConsole key={liveMatch} matchId={liveMatch} starter={starter} {...prefs} /> : <DemoConsole starter={starter} {...prefs} />}
     </AppThemeProvider>
   )
 }
